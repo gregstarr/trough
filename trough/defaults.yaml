@@ -1,0 +1,49 @@
+general:
+  figsize: [16, 10]
+  background_color: 'grey'
+  latitude_limits: null
+  longitude_limits: null
+
+grid:
+  enable: True
+  kwargs:
+    color: "black"
+
+projection:
+  name: "nearside_perspective"
+  kwargs:
+    central_longitude: -95
+    central_latitude: 50
+    satellite_height: 5000000
+
+natural_earth_features:
+  borders:
+    enable: True
+    kwargs: null
+  coastline:
+    enable: True
+    kwargs: null
+  states:
+    enable: True
+    kwargs: null
+#  lakes
+#  land
+#  ocean
+#  rivers
+
+magnetic_coordinates:
+  enable: True
+  coordinate_system: 'mlt'
+  xlocs: [0, 6, 12, 18]
+  ylocs: null
+  height: 0
+  line_color: 'white'
+  line_width: 1
+  line_style: '--'
+
+terminator:
+  enable: True
+  altitude: 0
+  line_color: 'red'
+  line_width: 1
+  line_style: '--'

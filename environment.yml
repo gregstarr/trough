@@ -1,0 +1,19 @@
+name: trough
+dependencies:
+   - python=3.7
+   - matplotlib
+   - numpy
+   - xarray
+   - pandas
+   - cartopy
+   - pip
+   - pytest
+   - astropy
+   - pip:
+      - pymap3d
+      - igrf12
+      - h5py
+# Manual install
+# apexpy - https://github.com/space-physics/apexpy
+# sunrisecalc
+
