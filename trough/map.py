@@ -38,22 +38,7 @@ DATE_FEATURES = {
 }
 
 
-class MapPlot:
-    """
-    The purpose of this is to make it easy to make a time series of plots by separating the general plot aesthetics
-    from the data. The plot aesthetics will all be determined (if desired) in a separate yaml file. I'm thinking the
-    workflow will be as follows:
-        - configure yaml file
-        - create MP object from yaml
-        - MP.create_ax() or equivelant called in __init__
-        - maybe something like MP.load_data ? this will load a time series of data to be plotted
-        - then you could call MP.plot_date or MP.plot_index which will set the ax to the proper date (magnetic
-        coordinate lines, title, etc.)
-        - it would be cool to have some integration with the multifile array thing I was working on so that you can
-        define some directory structure file pattern which will automatically load the various files as necessary
-        during iteration
-        - should keep track of what plot features are date-dependent and have a function which updates each one
-    """
+class DatePlot:
 
     def __init__(self, config=None):
         with open(DEFAULT_CONFIG, 'r') as f:
@@ -70,10 +55,11 @@ class MapPlot:
         # create figure and axes
         figsize = self.params['general']['figsize']
         self.fig = plt.figure(figsize=figsize)
-        self.ax = self._create_projection_axes()
+        self.ax = self._create_axes()
         background_color = self.params['general']['background_color']
         self.ax.background_patch.set_facecolor(background_color)
-        self._add_natural_earth_features()
+        if self.params['projection']['enable']:
+            self._add_natural_earth_features()
         self._add_grid()
 
         self.updates = []
@@ -83,21 +69,24 @@ class MapPlot:
                 feature = feature_class(self.params[feature_name])
                 self.updates.append(feature)
 
-    def plot_date(self, date):
+    def plot_date_range(self, date_range):
         for feature in self.updates:
-            feature.update(self.ax, date)
-        self.ax.set_title(str(date))
+            feature.update(self.ax, date_range)
+        self.ax.set_title(f"{str(date_range.start)[:19]} - {str(date_range.stop)[:19]}")
 
     def save_fig(self, directory, date, name=None):
-        date_str = str(date).replace('-', '').replace(':', '')
+        date_str = str(date).replace('-', '').replace(':', '')[:15]
         if name is not None:
             file_name = f"{date_str}_{name}.png"
         else:
             file_name = date_str + ".png"
         save_path = os.path.join(directory, file_name)
-        plt.savefig(save_path)
+        plt.savefig(save_path, fig=self.fig)
 
-    def _create_projection_axes(self):
+    def _create_axes(self):
+        if not self.params['projection']['enable']:
+            ax = self.fig.add_subplot(1, 1, 1)
+            return ax
         name = self.params['projection']['name']
         if name not in projection_dict:
             raise KeyError(f"Projection is invalid. Please choose from:\n{', '.join(projection_dict.keys())}")

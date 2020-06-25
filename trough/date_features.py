@@ -27,13 +27,13 @@ class DateFeature(abc.ABC):
         self.params = params
         self.plotted_objects = []
 
-    def update(self, ax, date):
+    def update(self, ax, date_range):
         if len(self.plotted_objects) > 0:
             self._clear(ax)
-        self._add(ax, date)
+        self._add(ax, date_range)
 
     @abc.abstractmethod
-    def _add(self, ax, date):
+    def _add(self, ax, date_range):
         pass
 
     @abc.abstractmethod
@@ -53,7 +53,7 @@ class LineDateFeature(DateFeature, abc.ABC):
 
 class MagneticCoordinates(LineDateFeature):
 
-    def _add(self, ax, date):
+    def _add(self, ax, date_range):
         # get parameters, set defaults
         coord_sys = self.params['coordinate_system']
         mlon_levels = self.params['xlocs']
@@ -62,7 +62,7 @@ class MagneticCoordinates(LineDateFeature):
         line_color = self.params['line_color']
         line_width = self.params['line_width']
         line_style = self.params['line_style']
-        mag_coord_lines = trough.utils.get_magnetic_coordinate_lines(date, coord_sys, height, mlat_levels, mlon_levels)
+        mag_coord_lines = trough.utils.get_magnetic_coordinate_lines(date_range.start, coord_sys, height, mlat_levels, mlon_levels)
         for level, lines in mag_coord_lines['mlon'].items():
             for line in lines:
                 self.plotted_objects += ax.plot(line[:, 0], line[:, 1], c=line_color, lw=line_width, ls=line_style,
@@ -75,9 +75,10 @@ class MagneticCoordinates(LineDateFeature):
 
 class Terminator(LineDateFeature):
 
-    def _add(self, ax, date):
+    def _add(self, ax, date_range):
+        date = date_range.start
         if isinstance(date, np.datetime64):
-            date = trough.utils.datetime64_to_datetime(date)
+            date = trough.utils.datetime64_to_datetime(date_range)
         altitude = self.params['altitude']
         line_color = self.params['line_color']
         line_width = self.params['line_width']
@@ -88,22 +89,35 @@ class Terminator(LineDateFeature):
                                             lw=line_width, ls=line_style, zorder=90, transform=ccrs.PlateCarree())
 
 
+class GpsSatelliteFeature(LineDateFeature):
+
+    def __init__(self, params, rx_array):
+        super().__init__(params)
+        self.rx_array = rx_array
+
+    def _add(self, ax, date_range):
+        sv = self.params.get('sv', 'G01')
+        ipp = self.rx_array.get_satellite_pierce_points_lla(date_range, sv)
+        if ipp is not None:
+            for rx in ipp:
+                self.plotted_objects += ax.plot(ipp[rx].sel(component='lon').values[::60],
+                                                ipp[rx].sel(component='lat').values[::60],
+                                                'w.', ms=.5, transform=ccrs.PlateCarree())
+
+
 class TimeAverageTecMap(DateFeature):
 
     def __init__(self, params, data):
         super().__init__(params)
         self.data = data
 
-    def _add(self, ax, date):
+    def _add(self, ax, date_range):
         vmin = self.params.get('vmin', 0)
         vmax = self.params.get('vmax', 30)
         cmap = self.params.get('cmap', 'jet')
-        average = self.params.get('average')
-        if average:
-            date_select = slice(date - average/2, date + average/2)
-            current_date_data = self.data.sel(time=date_select).mean(dim='time')
-        else:
-            current_date_data = self.data.sel(time=date)
+        current_date_data = self.data.sel(time=date_range)
+        if hasattr(current_date_data, 'time'):
+            current_date_data = current_date_data.mean(dim='time')
         self.plotted_objects.append(current_date_data.plot.pcolormesh(ax=ax, x='longitude', y='latitude',
                                                                       transform=ccrs.PlateCarree(), vmin=vmin,
                                                                       vmax=vmax, cmap=cmap, add_colorbar=False))

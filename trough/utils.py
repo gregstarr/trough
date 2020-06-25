@@ -10,6 +10,8 @@ import astropy.units as u
 import astropy.constants as aconst
 from skimage import measure
 import apexpy
+import glob
+import re
 
 
 def read_converted_tec_h5(fn):
@@ -226,3 +228,32 @@ def get_magnetic_coordinate_lines(date, coord_sys='mlt', height=0, mlat_levels=N
             magnetic_coordinate_lines['mlon'][level].append(np.column_stack((lon, lat)))
 
     return magnetic_coordinate_lines
+
+
+def get_mahali_files(data_dir="E:\\tec_data\\data\\rinex"):
+    """Get all the rinex files for Mahali
+
+    Parameters
+    ----------
+    data_dir: string
+            base directory which holds all the rinex files
+
+    Returns
+    -------
+    obs_file_dict: dictionary
+            {receiver name: observation files for the receiver, ...}
+    nav_file_dict: dictionary
+            {folder name (should be date): navigation file for that day, ...}
+    """
+    obs_files = glob.glob(os.path.join(data_dir, '*', '*.15o'))
+    nav_files = glob.glob(os.path.join(data_dir, '*', '*.15n'))
+    names = list(set(os.path.basename(fn)[:4] for fn in obs_files))
+    obs_file_dict = {"MAH"+re.search("(\\d+)", name).group(1): [fn for fn in obs_files if name in fn] for name in names}
+    nav_file_dict = {}
+    for fn in nav_files:
+        day = os.path.basename(os.path.dirname(fn))
+        if day in nav_file_dict:
+            continue
+        nav_file_dict[day] = fn
+    sat_bias_files = glob.glob(os.path.join(data_dir, "DCB", "*.BSX"))
+    return obs_file_dict, nav_file_dict

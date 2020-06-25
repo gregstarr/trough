@@ -1,20 +1,21 @@
 general:
-  figsize: [16, 10]
+  figsize: [20, 12]
   background_color: 'grey'
   latitude_limits: null
   longitude_limits: null
 
 grid:
-  enable: True
+  enable: False
   kwargs:
     color: "black"
 
 projection:
+  enable: False
   name: "nearside_perspective"
   kwargs:
-    central_longitude: -95
-    central_latitude: 50
-    satellite_height: 5000000
+    central_longitude: -120
+    central_latitude: 60
+    satellite_height: 7500000
 
 natural_earth_features:
   borders:
@@ -33,8 +34,8 @@ natural_earth_features:
 
 magnetic_coordinates:
   enable: True
-  coordinate_system: 'mlt'
-  xlocs: [0, 6, 12, 18]
+  coordinate_system: 'apex'
+  xlocs: [-120, -110, -100, -90, -80, -70, -60]
   ylocs: null
   height: 0
   line_color: 'white'
@@ -42,7 +43,7 @@ magnetic_coordinates:
   line_style: '--'
 
 terminator:
-  enable: True
+  enable: False
   altitude: 0
   line_color: 'red'
   line_width: 1

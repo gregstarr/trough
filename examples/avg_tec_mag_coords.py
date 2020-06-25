@@ -40,7 +40,7 @@ for date in tec_data.time:
     print(date)
     datetime = trough.utils.datetime64_to_datetime(date)
     apex_converter = apexpy.Apex(date=datetime)
-    glat, glon = apex_converter.convert(mlat_grid.ravel(), mlt_grid.ravel(), 'mlt', 'geo', datetime=datetime)
+    glat, glon = apex_converter.convert(mlat_grid.ravel(), mlt_grid.ravel(), 'mlt', 'geo', datetime=datetime, precision=-1)
     glat_grid = glat.reshape(mlt_grid.shape)
     glon_grid = glon.reshape(mlt_grid.shape)
     lat = xr.DataArray(glat_grid, dims=["mlat", "mlt"], coords={"mlt": mlt, "mlat": mlat})

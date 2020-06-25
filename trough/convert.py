@@ -4,30 +4,25 @@ import numpy as np
 import trough
 
 
-def mlt_to_geo(mlat, mlt, times, height=0, ssheight=50*6371):
-    """
-
-    Parameters
-    ----------
-    mlat
-    mlon
-    time
-    height
-    ssheight
-
-    Returns
-    -------
-
-    """
-    converter = apexpy.Apex(date=trough.utils.datetime64_to_datetime(times[0]))
+def mlt_to_geo(mlat, mlt, times, converter=None, height=0, ssheight=50*6371):
+    if converter is None:
+        converter = apexpy.Apex(date=trough.utils.datetime64_to_datetime(times[0]))
     ssglat, ssglon = subsol_array(times)
     ssalat, ssalon = converter.geo2apex(ssglat, ssglon, ssheight)
-
-    # np.float64 will ensure lists are converted to arrays
-    mlon = np.ravel((15 * mlt[None, :] - 180 + ssalon[:, None] + 360) % 360)
-    mlat = np.ravel(mlat[None, :] * np.ones((times.size, 1)))
+    mlon = np.ravel((15 * mlt - 180 + ssalon + 360) % 360)
+    mlat = np.ravel(mlat * np.ones((times.size, 1)))
     lat, lon, _ = converter.apex2geo(mlat, mlon, height)
-    return lat.reshape((times.size, -1)), lon.reshape((times.size, -1))
+    return lat, lon
+
+
+def geo_to_mlt(lat, lon, times, converter=None, height=0, ssheight=50*6371):
+    if converter is None:
+        converter = apexpy.Apex(date=trough.utils.datetime64_to_datetime(times[0]))
+    mlat, mlon = converter.geo2apex(lat, lon, height)
+    ssglat, ssglon = subsol_array(times)
+    ssalat, ssalon = converter.geo2apex(ssglat, ssglon, ssheight)
+    mlt = (180 + np.float64(mlon) - ssalon) / 15 % 24
+    return mlat, mlt
 
 
 def subsol_array(times):
