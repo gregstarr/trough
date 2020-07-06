@@ -5,14 +5,42 @@ import trough
 
 
 def mlt_to_geo(mlat, mlt, times, converter=None, height=0, ssheight=50*6371):
+    """Convert MLT coordinates to geographic
+
+    Parameters
+    ----------
+    mlat, mlt: np.ndarray float
+            magnetic latitude, magnetic local time and UT arrays, all 1d and the same size
+    times: xarray time index
+            times gotten from an xarray as DataArray.time
+    converter: apexpy.Apex
+            pre-initialized apex converter
+    height: float
+    ssheight: float
+
+    Returns
+    -------
+    lat, lon: np.ndarray
+            geographic latitude and longitude
+    """
+    broadcast = True
+    n_locs = mlat.shape[0]
+    n_times = times.shape[0]
+    if n_locs == n_times:
+        broadcast = False
     if converter is None:
         converter = apexpy.Apex(date=trough.utils.datetime64_to_datetime(times[0]))
     ssglat, ssglon = subsol_array(times)
     ssalat, ssalon = converter.geo2apex(ssglat, ssglon, ssheight)
-    mlon = np.ravel((15 * mlt - 180 + ssalon + 360) % 360)
-    mlat = np.ravel(mlat * np.ones((times.size, 1)))
-    lat, lon, _ = converter.apex2geo(mlat, mlon, height)
-    return lat, lon
+    if broadcast:
+        mlon = (15 * mlt[None, :] - 180 + ssalon[:, None] + 360) % 360
+        mlat = mlat[None, :] * np.ones_like(times, dtype=float)[:, None]
+        lat, lon, _ = converter.apex2geo(mlat.ravel(), mlon.ravel(), height, precision=1e-3)
+        return lat.reshape((n_times, n_locs)), lon.reshape((n_times, n_locs))
+    else:
+        mlon = (15 * mlt - 180 + ssalon + 360) % 360
+        lat, lon, _ = converter.apex2geo(mlat, mlon, height, precision=1e-3)
+        return lat, lon
 
 
 def geo_to_mlt(lat, lon, times, converter=None, height=0, ssheight=50*6371):
@@ -21,39 +49,36 @@ def geo_to_mlt(lat, lon, times, converter=None, height=0, ssheight=50*6371):
     mlat, mlon = converter.geo2apex(lat, lon, height)
     ssglat, ssglon = subsol_array(times)
     ssalat, ssalon = converter.geo2apex(ssglat, ssglon, ssheight)
-    mlt = (180 + np.float64(mlon) - ssalon) / 15 % 24
-    return mlat, mlt
+    if lon.shape == times.shape:
+        mlt = (180 + mlon - ssalon) / 15 % 24
+        return mlat, mlt
+    mlt = (180 + mlon[None, :] - ssalon[:, None]) / 15 % 24
+    return mlat[None, :] * np.ones_like(times, dtype=float), mlt
+
+
+def mlon_to_mlt(mlon, times, converter=None, ssheight=50*6371):
+    if converter is None:
+        converter = apexpy.Apex(date=trough.utils.datetime64_to_datetime(times[0]))
+    ssglat, ssglon = subsol_array(times)
+    ssalat, ssalon = converter.geo2apex(ssglat, ssglon, ssheight)
+    # np.float64 will ensure lists are converted to arrays
+    if mlon.shape == times.shape:
+        return (180 + np.float64(mlon) - ssalon) / 15 % 24
+    return (180 + mlon[None, :] - ssalon[:, None]) / 15 % 24
+
+
+def mlt_to_mlon(mlt, times, converter=None, ssheight=50*6371):
+    if converter is None:
+        converter = apexpy.Apex(date=trough.utils.datetime64_to_datetime(times[0]))
+    ssglat, ssglon = subsol_array(times)
+    ssalat, ssalon = converter.geo2apex(ssglat, ssglon, ssheight)
+
+    if mlt.shape == times.shape:
+        return (15 * np.float64(mlt) - 180 + ssalon + 360) % 360
+    return (15 * mlt[None, :] - 180 + ssalon[:, None] + 360) % 360
 
 
 def subsol_array(times):
-    """Finds subsolar geocentric latitude and longitude.
-
-    Parameters
-    ==========
-    datetime : :class:`datetime.datetime`
-
-    Returns
-    =======
-    sbsllat : float
-        Latitude of subsolar point
-    sbsllon : float
-        Longitude of subsolar point
-
-    Notes
-    =====
-    Based on formulas in Astronomical Almanac for the year 1996, p. C24.
-    (U.S. Government Printing Office, 1994). Usable for years 1601-2100,
-    inclusive. According to the Almanac, results are good to at least 0.01
-    degree latitude and 0.025 degrees longitude between years 1950 and 2050.
-    Accuracy for other years has not been tested. Every day is assumed to have
-    exactly 86400 seconds; thus leap seconds that sometimes occur on December
-    31 are ignored (their effect is below the accuracy threshold of the
-    algorithm).
-
-    After Fortran code by A. D. Richmond, NCAR. Translated from IDL
-    by K. Laundal.
-
-    """
     # convert to year, day of year and seconds since midnight
     year = times.dt.year.values
     doy = times.dt.dayofyear.values

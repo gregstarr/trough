@@ -1,3 +1,8 @@
+"""
+Plotting script:
+    - single image
+    - average TEC in MLT bins over entire (downloaded) Madrigal dataset for quiet, medium and stormy conditions
+"""
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr

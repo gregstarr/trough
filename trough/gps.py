@@ -4,14 +4,8 @@ from astropy import constants as ac
 import xarray as xr
 import os
 import pymap3d as pm
-from cartopy.mpl.geoaxes import GeoAxes
-import cartopy.crs as ccrs
-import glob
-import apexpy
 
 from trough import utils
-from trough.datasource import DataSource
-from trough import convert
 
 
 # GPS L1 and L2 frequencies
@@ -19,7 +13,7 @@ F1 = 1575420000
 F2 = 1227600000
 
 
-class ReceiverArray(DataSource):
+class ReceiverArray:
     """
     I want this to be able to give me TEC and pierce points for any satellite and all the receivers. This should be
     an xarray.DataSet who's DataArrays correspond to the various receivers. Within each DataArray, there will be the
@@ -145,111 +139,6 @@ class ReceiverArray(DataSource):
             vtec.append(xr.concat(sv_vtec, dim='rx'))
         self.vtec = xr.concat(vtec, dim='sv')
         self.vtec.to_netcdf(save_name)
-
-    def plot_tec_timeseries(self, ax, date):
-        pass
-
-    def plot_ipp(self, ax, date, dt, mag_coords=None, svs=None, rxs=None, min_el=0, **plot_kwargs):
-        """plots ionospheric pierce points over a time range
-        TODO:
-            - sv / rx specific colors
-
-        Parameters
-        ----------
-        ax: Matplotlib Axes or cartopy GeoAxes
-                axes on which to plot
-        date: np.datetime64
-                (center) date which the plot represents
-        dt: np.timedelta64
-                width of time window to plot
-        mag_coords: str {'apex', 'mlt'}
-                magnetic coordinate system to convert to (can't specify this with cartopy GeoAxes)
-        svs, rxs: list
-                list of svs and rxs to plot
-        min_el: float
-                minimum elevation to limit points to
-        plot_kwargs:
-                kwargs to pass to ax.plot
-        """
-        if isinstance(ax, GeoAxes) and mag_coords is not None:
-            raise Exception("Can't plot magnetic coordinates on a GeoAxes")
-        if svs is None:
-            svs = self.pierce_points.sv.values
-        if rxs is None:
-            rxs = self.pierce_points.rx.values
-        if mag_coords is not None:
-            apex_converter = apexpy.Apex(date=utils.datetime64_to_datetime(date))
-        time_range = slice(date - dt/2, date+dt/2)
-        for rx in rxs:
-            for sv in svs:
-                x = self.pierce_points.sel(time=time_range, sv=sv, rx=rx, component='lon')
-                y = self.pierce_points.sel(time=time_range, sv=sv, rx=rx, component='lat')
-                el = self.pierce_points.sel(time=time_range, sv=sv, rx=rx, component='el')
-                good_data_mask = x.notnull() * y.notnull() * el.notnull() * (el > min_el)
-                x = x[good_data_mask]
-                y = y[good_data_mask]
-                if isinstance(ax, GeoAxes):
-                    plot_kwargs.update(transform=ccrs.PlateCarree())
-                if mag_coords == 'apex':
-                    y, x = apex_converter.convert(y, x, 'geo', mag_coords)
-                elif mag_coords == 'mlt':
-                    y, x = convert.geo_to_mlt(y, x, x.time, converter=apex_converter)
-                    x[x > 12] = x[x > 12] - 24
-                ax.plot(x, y, '.', **plot_kwargs)
-
-    def plot_tec_ipp(self, ax, date, dt, mag_coords=None, svs=None, rxs=None, min_el=0, **plot_kwargs):
-        """plots ionospheric pierce points colored with TEC over a time range
-
-        Parameters
-        ----------
-        ax: Matplotlib Axes or cartopy GeoAxes
-                axes on which to plot
-        date: np.datetime64
-                (center) date which the plot represents
-        dt: np.timedelta64
-                width of time window to plot
-        mag_coords: str {'apex', 'mlt'}
-                magnetic coordinate system to convert to (can't specify this with cartopy GeoAxes)
-        svs, rxs: list
-                list of svs and rxs to plot
-        min_el: float
-                minimum elevation to limit points to
-        plot_kwargs:
-                kwargs to pass to ax.plot
-        """
-        if self.vtec is not None:
-            tec = self.vtec
-        elif self.stec is not None:
-            tec = self.stec
-        else:
-            raise Exception("RxArray needs TEC first")
-        if isinstance(ax, GeoAxes) and mag_coords is not None:
-            raise Exception("Can't plot magnetic coordinates on a GeoAxes")
-        if svs is None:
-            svs = tec.sv.values
-        if rxs is None:
-            rxs = tec.rx.values
-        if mag_coords is not None:
-            apex_converter = apexpy.Apex(date=utils.datetime64_to_datetime(date))
-        time_range = slice(date - dt / 2, date + dt / 2)
-        for rx in rxs:
-            for sv in svs:
-                x = self.pierce_points.sel(time=time_range, sv=sv, rx=rx, component='lon')
-                y = self.pierce_points.sel(time=time_range, sv=sv, rx=rx, component='lat')
-                el = self.pierce_points.sel(time=time_range, sv=sv, rx=rx, component='el')
-                t = tec.sel(time=time_range, sv=sv, rx=rx)
-                good_data_mask = x.notnull() * y.notnull() * el.notnull() * (el > min_el) * t.notnull()
-                x = x[good_data_mask]
-                y = y[good_data_mask]
-                t = t[good_data_mask]
-                if isinstance(ax, GeoAxes):
-                    plot_kwargs.update(transform=ccrs.PlateCarree())
-                if mag_coords == 'apex':
-                    y, x = apex_converter.convert(y, x, 'geo', mag_coords)
-                elif mag_coords == 'mlt':
-                    y, x = convert.geo_to_mlt(y, x, x.time, converter=apex_converter)
-                    x[x > 12] = x[x > 12] - 24
-                ax.scatter(x, y, c=t.values, **plot_kwargs)
 
 
 def _tec_rx(obs):
@@ -394,53 +283,42 @@ def get_satellite_positions(orbital_params, times=None, interp_res=60):
     return xr.concat(positions, dim='sv')
 
 
-def get_pierce_points(arg, rx_location, pierce_point_altitude=350, times=None, interp_res=60):
+def get_pierce_points(satellite_positions, rx_location, pierce_point_altitude=350):
     """get the ionospheric pierce points for a satellite using spherical approximation
 
     Parameters
     ----------
-    arg: xarray.DataArray, one of the following
-        orbital_params: xarray.DataArray
-                Orbital parameters for the satellite. Should have 1 dimension, "time", and no missing values
-        satellite_positions: xarray.DataArray
+    satellite_positions: xarray.DataArray
                 ECEF coordinates of the satellite
     rx_location: iterable of floats
                 X, Y, Z in ECEF (m)
     pierce_point_altitude: float, optional
             altitude of pierce points
-    times: np.ndarray, optional
-            times to get satellite position at
-    interp_res: float, optional
-            if `times` is None, then create time series from beginning to end of `orbital_params` at a resolution
-            of `interp_res` seconds
 
     Returns
     -------
-    Pierce Points: xarray.DataArray
+    Pierce Points: np.ndarray (N x 3)
+            ECEF (m) pierce points
     """
-    nparray = isinstance(arg, np.ndarray)
-    # satellite position in ECEF (km)
-    if not nparray and "Eccentricity" in arg:
-        sat_pos = get_single_sat_pos(arg, times, interp_res) / 1000.
+    if isinstance(satellite_positions, xr.DataArray):
+        sat_pos = satellite_positions.values / 1000.
     else:
-        sat_pos = arg / 1000.
+        sat_pos = satellite_positions / 1000.
+
     r_e = ac.R_earth.to('km').value  # earth radius
     rx_loc = rx_location.copy() / 1000.  # receiver location
     r2_rx = np.sum(rx_loc**2)  # receiver
-    if nparray:
-        rx_sat_dot = sat_pos @ rx_loc
-        a = r2_rx - 2 * rx_sat_dot + (sat_pos ** 2).sum(axis=1)
-    else:
-        rx_sat_dot = (sat_pos * rx_loc).sum(dim='component')
-        a = r2_rx - 2 * rx_sat_dot + (sat_pos**2).sum(dim='component')
+    rx_sat_dot = sat_pos @ rx_loc
+    a = r2_rx - 2 * rx_sat_dot + (sat_pos ** 2).sum(axis=1)
     b = 2 * (rx_sat_dot - r2_rx)
     c = r2_rx - (r_e + pierce_point_altitude)**2
     t = (-1 * b + np.sqrt(b**2 - 4 * a * c)) / (2 * a)
-    if nparray:
-        ipp = (1 - t)[:, None] * rx_loc[None, :] + t[:, None] * sat_pos
-    else:
-        ipp = (1 - t) * rx_loc + t * sat_pos
-    return ipp * 1000.
+    ipp = (1 - t)[:, None] * rx_loc[None, :] + t[:, None] * sat_pos
+    ipp *= 1000.
+    if isinstance(satellite_positions, xr.DataArray):
+        return xr.DataArray(ipp, dims=['time', 'component'],
+                            coords={'time': satellite_positions.time.values, 'component': ['x', 'y', 'z']})
+    return ipp
 
 
 ########################################################################################################################
@@ -500,8 +378,9 @@ def open_and_merge_nav_files(files):
     -------
     navigation parameters: xarray.Dataset
     """
-    nav_data = [open_nav(fn) for fn in files]
-    return xr.concat(nav_data, dim='time')
+    nav_data = [gr.load(fn) for fn in files]
+    nav = xr.concat(nav_data, dim='time')
+    return nav.interpolate_na(dim='time', fill_value='extrapolate', method='nearest')
 
 
 def open_and_merge_obs_files(files, rx_name=None):

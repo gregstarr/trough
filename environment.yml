@@ -9,11 +9,12 @@ dependencies:
    - pip
    - pytest
    - astropy
+   - scikit-learn
    - pip:
       - pymap3d
       - igrf12
       - h5py
+      - unlzw2
+      - tensorflow
 # Manual install
 # apexpy - https://github.com/space-physics/apexpy
-# sunrisecalc
-

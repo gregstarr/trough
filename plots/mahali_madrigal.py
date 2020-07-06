@@ -1,3 +1,15 @@
+"""
+Plotting script:
+    - 3 subplots
+    - first:
+        - apex coordinates
+        - TEC map
+        - Mahali IPPs for SV G07 and G30
+    - second:
+        - time series line plot of G30 TEC
+    - third:
+        - time series line plot of G07 TEC
+"""
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
