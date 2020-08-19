@@ -2,6 +2,15 @@ import numpy as np
 import xarray as xr
 import pymap3d as pm
 import apexpy
+from astropy import constants as aconst
+import datetime
+from skimage import measure
+from skimage import filters
+from scipy.interpolate import UnivariateSpline
+
+import matplotlib.pyplot as plt
+from matplotlib.projections.polar import PolarAxes
+from matplotlib import transforms
 from cartopy.feature import COASTLINE
 from cartopy.mpl.geoaxes import GeoAxes
 from cartopy import crs
@@ -36,6 +45,22 @@ def unlink_wrap(dat, lims=(-np.pi, np.pi), thresh=0.95):
 
 
 ########################################################################################################################
+# AXES #################################################################################################################
+########################################################################################################################
+def format_polar_mag_ax(ax):
+    ax.tick_params(axis='both', which='both', bottom=False, top=False, left=False, right=False, labelbottom=False, labeltop=False, labelleft=False, labelright=False)
+    ax.set_ylim(0, 60)
+    ax.set_xticks(np.arange(8) * np.pi/4)
+    ax.set_xticklabels((np.arange(8) * 3 + 6) % 24)
+    ax.set_yticks([10, 20, 30, 40, 50])
+    ax.set_yticklabels([80, 70, 60, 50, 40])
+    ax.grid()
+    ax.tick_params(axis='x', which='both', bottom=True, labelbottom=True)
+    ax.tick_params(axis='y', which='both', left=True, labelleft=True, width=0, length=0)
+    ax.set_rlabel_position(80)
+
+
+########################################################################################################################
 # BORDERS ##############################################################################################################
 ########################################################################################################################
 def plot_mlt_lines_mag(ax, date, mlt_vals=np.arange(-6, 7, 3)):
@@ -46,6 +71,28 @@ def plot_mlt_lines_mag(ax, date, mlt_vals=np.arange(-6, 7, 3)):
     ax.vlines(mlon, 20, 80, colors='w', linestyles='--')
     for i in range(mlt_vals.shape[0]):
         ax.text(mlon[i], 20, str(mlt_vals[i]), color='w')
+
+
+def plot_solar_terminator(ax, date, altitude=300, **plot_kwargs):
+    if isinstance(date, np.datetime64):
+        date = utils.datetime64_to_datetime(date)
+    converter = apexpy.Apex(date=date)
+    glon, glat = np.meshgrid(np.arange(-180, 180, 1), np.arange(-90, 90.1, 1))
+    sun_el = utils.get_sun_elevation(date, glon, glat)
+    r_e = aconst.R_earth.to('km').value
+    horizon = np.rad2deg(np.arccos(r_e / (r_e + altitude)))
+    terminators = measure.find_contours(sun_el, -1 * horizon)
+    x = []
+    y = []
+    for terminator in terminators:
+        x.append(terminator[:, 1] - 180)
+        y.append(terminator[:, 0] - 90)
+    for lon, lat in zip(x, y):
+        mlat, mlt = converter.convert(lat, lon, 'geo', 'mlt', datetime=date)
+        mlt[mlt > 12] -= 24
+        theta = np.pi * (mlt - 6) / 12
+        r = 90 - mlat
+        ax.plot(theta, r, **plot_kwargs)
 
 
 ########################################################################################################################
@@ -72,88 +119,326 @@ def plot_coastline_mag(ax, date, coord_sys='apex', **plot_kwargs):
             if coord_sys == 'mlt':
                 x[x > 12] -= 24
             for slc in unlink_wrap(x, [-12, 12]):
-                ax.plot(x[slc], y[slc], 'k', **plot_kwargs)
+                if isinstance(ax, PolarAxes):
+                    if coord_sys == 'mlt':
+                        theta = np.pi * (x[slc] - 6) / 12
+                    else:
+                        theta = np.pi * x[slc] / 180
+                    r = 90 - y[slc]
+                    ax.plot(theta, r, 'k', **plot_kwargs)
+                else:
+                    ax.plot(x[slc], y[slc], 'k', **plot_kwargs)
 
 
 ########################################################################################################################
 # TEC MAP ##############################################################################################################
 ########################################################################################################################
-def plot_tec_map_geo(ax, date, tec, y_arange_args=None, x_arange_args=None, dt=None, **plot_kwargs):
-    # averaging and filling
-    if dt is None:
-        tec = tec.interp(time=date, method='nearest')
+def plot_tec_map_mag(ax, date, data, coord_sys='mlt', **plot_kwargs):
+    """Plot a magnetic coordinates TEC map no matter what: cartesian, polar, mlon, mlt
+    """
+    if isinstance(date, np.datetime64):
+        date = utils.datetime64_to_datetime(date)
+    elif isinstance(date, datetime.datetime):
+        pass
     else:
-        time_range = slice(date - dt / 2, date + dt / 2)
-        tec = tec.sel(time=time_range).mean(dim='time')
-        binned = tec.coarsen(longitude=2, latitude=2).mean()
-        binned.load()
-        interpolated = binned.interp(longitude=tec.longitude, latitude=tec.latitude)
-        tec = tec.where(tec.notnull(), interpolated)
+        raise Exception("bad date")
 
-    # setup bounds
-    if x_arange_args is None:
-        x_vals = np.arange(-180, 180)
+    if coord_sys == 'mlt':
+        converter = apexpy.Apex(date=date)
+        x = converter.mlon2mlt(data.mlon.values, date)
+        x[x > 12] -= 24
     else:
-        x_vals = np.arange(*x_arange_args)
-    if y_arange_args is None:
-        y_vals = np.arange(-90, 90)
-    else:
-        y_vals = np.arange(*y_arange_args)
-    x, y = np.meshgrid(x_vals, y_vals)
-    tec = tec.sel(longitude=x_vals, latitude=y_vals).T
+        x = data.mlon.values
 
-    # plotting
-    if isinstance(ax, GeoAxes):
-        plot_kwargs.update(transform=crs.PlateCarree())
-    ax.pcolormesh(x, y, tec, **plot_kwargs)
+    x, y = np.meshgrid(x, data.mlat.values)
 
-
-def plot_tec_map_mag(ax, date, tec, coord_sys='apex', y_arange_args=None, x_arange_args=None, dt=None, **plot_kwargs):
-    # averaging and filling
-    if dt is None:
-        tec = tec.interp(time=date, method='nearest')
-    else:
-        time_range = slice(date - dt / 2, date + dt / 2)
-        tec = tec.sel(time=time_range).mean(dim='time')
-        binned = tec.coarsen(longitude=2, latitude=2).mean()
-        binned.load()
-        interpolated = binned.interp(longitude=tec.longitude, latitude=tec.latitude)
-        tec = tec.where(tec.notnull(), interpolated)
-
-    # bounds
-    datetime = utils.datetime64_to_datetime(date)
-    converter = apexpy.Apex(date=datetime)
-    if x_arange_args is None:
-        if coord_sys == 'apex':
-            x_vals = np.arange(-180, 180)
-        elif coord_sys == 'mlt':
-            x_vals = np.arange(-12, 12, 24/360)
+    if isinstance(ax, PolarAxes):
+        if coord_sys == 'mlt':
+            theta = np.pi * (x - 6) / 12
         else:
-            raise Exception("Bad coordinate system must be apex or mlt")
+            theta = np.pi * (x - 90) / 180
+        r = 90 - y
+        ax.pcolormesh(theta, r, data.values, **plot_kwargs)
     else:
-        x_vals = np.arange(*x_arange_args)
-    if y_arange_args is None:
-        y_vals = np.arange(-90, 90)
+        sorting_index = np.argsort(x[0])
+        ax.pcolormesh(x[:, sorting_index], y[:, sorting_index], data.values[:, sorting_index], **plot_kwargs)
+
+
+def plot_lr_debug(ax, date, debug):
+    """plot:
+        - section
+        - trough area
+    """
+    data = debug.sel(time=date)
+    used_low = []
+    used_high = []
+    if isinstance(ax, PolarAxes):
+        for pwall, ewall, trough, low_mlt, high_mlt in zip(data['pwall'].item(), data['ewall'].item(),
+                                                           data['trough'].item(), data['low_mlt'].item(), data['high_mlt'].item()):
+            theta_l = np.pi * (low_mlt - 6) / 12
+            theta_h = np.pi * (high_mlt - 6) / 12
+            if trough:
+                ax.plot([theta_l, theta_h], [90 - pwall, 90 - pwall], f'r-')
+                ax.plot([theta_l, theta_h], [90 - ewall, 90 - ewall], f'r-')
+            if np.any(abs(np.array(used_high) - high_mlt) < .5):
+                continue
+            if np.any(abs(np.array(used_low) - low_mlt) < .5):
+                continue
+            used_high.append(high_mlt)
+            used_low.append(low_mlt)
+            ax.plot([theta_l, theta_l], [10, 50], f'k-')
+            ax.plot([theta_h, theta_h], [10, 50], f'k-')
+
     else:
-        y_vals = np.arange(*y_arange_args)
-    x, y = np.meshgrid(x_vals, y_vals)
+        return
 
-    # coordinate conversion
-    glat, glon = converter.convert(y.ravel(), x.ravel(), coord_sys, 'geo', datetime=datetime, precision=-1)
-    glat_grid = glat.reshape(y.shape)
-    glon_grid = glon.reshape(y.shape)
-    lat = xr.DataArray(glat_grid, dims=["y", "x"], coords={"x": x_vals, "y": y_vals})
-    lon = xr.DataArray(glon_grid, dims=["y", "x"], coords={"x": x_vals, "y": y_vals})
-    tec = tec.interp(longitude=lon, latitude=lat)
 
-    # plotting
-    ax.pcolormesh(x, y, tec, **plot_kwargs)
+def plot_tec_trough(ax, date, troughs, coord_sys='mlt', **plot_kwargs):
+    if isinstance(date, np.datetime64):
+        date = utils.datetime64_to_datetime(date)
+    elif isinstance(date, datetime.datetime):
+        pass
+    else:
+        raise Exception("bad date")
+
+    if coord_sys == 'mlt':
+        converter = apexpy.Apex(date=date)
+        x = converter.mlon2mlt(troughs.mlon.values, date)
+        x[x > 12] -= 24
+    else:
+        x = troughs.mlon.values
+
+    x, y = np.meshgrid(x, troughs.mlat.values)
+
+    if isinstance(ax, PolarAxes):
+        if coord_sys == 'mlt':
+            theta = np.pi * (x - 6) / 12
+        else:
+            theta = np.pi * (x - 90) / 180
+        r = 90 - y
+        ax.contourf(theta, r, troughs.values, levels=1, colors='none', hatches=[None, '////'], **plot_kwargs)
+    else:
+        return
+
+
+def plot_lr_predictions(ax, date, features, lr, coord_sys='mlt', **plot_kwargs):
+    if isinstance(date, np.datetime64):
+        date = utils.datetime64_to_datetime(date)
+    elif isinstance(date, datetime.datetime):
+        pass
+    else:
+        raise Exception("bad date")
+
+    if coord_sys == 'mlt':
+        converter = apexpy.Apex(date=date)
+        x = converter.mlon2mlt(features.mlon.values, date)
+        x[x > 12] -= 24
+    else:
+        x = features.mlon.values
+
+    x, y = np.meshgrid(x, features.mlat.values)
+    d = lr.predict_proba(features.values.reshape((-1, 4)))[:, 1].reshape(features.shape[:-1])
+
+    if isinstance(ax, PolarAxes):
+        if coord_sys == 'mlt':
+            theta = np.pi * (x - 6) / 12
+        else:
+            theta = np.pi * (x - 90) / 180
+        r = 90 - y
+        ax.pcolormesh(theta, r, d, **plot_kwargs)
+    else:
+        sorting_index = np.argsort(x[0])
+        # ax.pcolormesh(x[:, sorting_index], y[:, sorting_index], d, **plot_kwargs)
+
+
+def plot_feature_maps(ax, date, data, coeffs=None, coord_sys='mlt', **plot_kwargs):
+    if isinstance(date, np.datetime64):
+        date = utils.datetime64_to_datetime(date)
+    elif isinstance(data, datetime.datetime):
+        pass
+    else:
+        raise Exception("bad date")
+
+    if coord_sys == 'mlt':
+        converter = apexpy.Apex(date=date)
+        x = converter.mlon2mlt(data.mlon.values, date)
+        x[x > 12] -= 24
+    else:
+        x = data.mlon.values
+
+    x, y = np.meshgrid(x, data.mlat.values)
+
+    for i, a in enumerate(ax):
+        if isinstance(a, PolarAxes):
+            if coord_sys == 'mlt':
+                theta = np.pi * (x - 6) / 12
+            else:
+                theta = np.pi * (x - 90) / 180
+            r = 90 - y
+            if coeffs is not None:
+                a.pcolormesh(theta, r, coeffs[:, i] * data.values[:, :, i], **plot_kwargs)
+            else:
+                a.pcolormesh(theta, r, data.values[:, :, i], **plot_kwargs)
+        else:
+            sorting_index = np.argsort(x[0])
+            # ax.pcolormesh(x[:, sorting_index], y[:, sorting_index], d, **plot_kwargs)
+
+
+def plot_tec_lat_profiles(polar_ax, line_axs, date, data, mlts=np.array((-3, -2, -1, 0, 1, 2, 3))):
+    if isinstance(date, np.datetime64):
+        date = utils.datetime64_to_datetime(date)
+    elif isinstance(data, datetime.datetime):
+        pass
+    else:
+        raise Exception("bad date")
+
+    converter = apexpy.Apex(date=date)
+    mlons = converter.mlt2mlon(mlts, date)
+    mlons[mlons > 180] -= 360
+    for i in range(mlts.shape[0]):
+        theta = np.pi * (mlts[i] - 6) / 12
+        polar_ax.plot([theta, theta], [10, 70], 'w--', alpha=.5)
+        profile = data.interp(mlon=mlons[i], method='nearest')
+        line_axs[i].plot(profile.mlat.values, profile.values, '.')
+        mask = profile.notnull().values
+        if mask.sum() < 5:
+            continue
+        spl = UnivariateSpline(profile.mlat.values[mask], profile.values[mask], k=4)
+        spl.set_smoothing_factor(4)
+        line_axs[i].plot(profile.mlat.values[mask], spl(profile.mlat.values[mask]), '--')
 
 
 ########################################################################################################################
 # SATELLITES ###########################################################################################################
 ########################################################################################################################
 dmsp_colors = {15: 'r', 16: 'b', 17: 'g', 18: 'y'}
+swarm_colors = {'A': 'k', 'B': 'm', 'C': 'c'}
+
+
+def plot_trough_locations(ax, date, data_dict, dt=np.timedelta64(60, 'm'), satellites=None):
+    if satellites is None:
+        satellites = list(data_dict.keys())
+    for sat in satellites:
+        if sat in dmsp_colors:
+            c = dmsp_colors[sat]
+        elif sat in swarm_colors:
+            c = swarm_colors[sat]
+        else:
+            c = ''
+        date_mask = (data_dict[sat].time.values >= date - dt / 2) * (data_dict[sat].time.values <= date + dt / 2)
+        if not date_mask.any().item():
+            return
+        sat_data = data_dict[sat].isel(time=date_mask)
+        if isinstance(ax, PolarAxes):
+            x = sat_data['mlt'].values
+            y = sat_data['min'].values
+            x[x > 12] -= 24
+            theta = np.pi * (x - 6) / 12
+            r = 90 - y
+            ax.plot(theta, r, f'{c}x', ms=10)
+        else:
+            ax.plot(sat_data['mlon'], sat_data['min'], f'{c[sat]}x', ms=10)
+
+
+def plot_ion_drift(ax, date, dataset, dt=np.timedelta64(60, 'm'), satellites=None, min_mlat=50, hemisphere='north'):
+    """
+    https://agupubs.onlinelibrary.wiley.com/doi/epdf/10.1029/2018EA000546
+    """
+    data = dataset.sel(time=slice(date - dt / 2, date + dt / 2))
+    if satellites is None:
+        satellites = data.satellite.values
+    if 'Viy' in data:
+        drift = xr.where(data['Quality_flags'] == 4, data['Viy'], 0)
+        colors = swarm_colors
+    else:
+        drift = data['hor_ion_v']
+        colors = dmsp_colors
+    plotted = False
+    if drift.size == 0:
+        return
+    for sat in satellites:
+        sat_data = data.sel(satellite=sat).coarsen(time=10, boundary='trim').mean()
+        sat_drift = drift.sel(satellite=sat).coarsen(time=10, boundary='trim').mean()
+        if hemisphere == 'north':
+            mask = sat_data['mlat'] >= min_mlat
+            if mask.sum() == 0:
+                continue
+            r = 90 - sat_data['mlat'].values[mask]
+            z = np.column_stack((np.zeros((r.shape[0] - 1, 2)), -1 * np.ones(r.shape[0] - 1)))
+        elif hemisphere == 'south':
+            mask = -1 * sat_data['mlat'] >= min_mlat
+            if mask.sum() == 0:
+                continue
+            r = 90 + sat_data['mlat'].values[mask]
+            z = np.column_stack((np.zeros((r.shape[0] - 1, 2)), np.ones(r.shape[0] - 1)))
+        else:
+            raise Exception("hemisphere must be south or north")
+        theta = (np.pi * sat_data['mlt'].values[mask] / 12) - np.pi / 2  # zero at bottom
+        xy = np.column_stack((r * np.cos(theta), r * np.sin(theta), np.zeros_like(theta)))
+        v = np.cross(z, np.diff(xy, axis=0))
+        v = sat_drift.values[mask][:-1, None] * v / np.linalg.norm(v, axis=1)[:, None]
+        q = ax.quiver(theta[:-1], r[:-1], v[:, 0], v[:, 1], units='xy', width=.05, color=colors[sat], scale=300)
+        plotted = True
+    if plotted:
+        ax.quiverkey(q, .9, .9, 500, "500 m/s")
+
+
+def plot_sat_location(ax, date, dataset, dt=np.timedelta64(60, 'm'), xbounds=(-120, 20), ybounds=(20, 80),
+                       satellites=None):
+    data = dataset.sel(time=slice(date-dt/2, date+dt/2))
+    if satellites is None:
+        satellites = data.satellite.values
+    for sat in satellites:
+        if sat in dmsp_colors:
+            c = dmsp_colors[sat]
+        elif sat in swarm_colors:
+            c = swarm_colors[sat]
+        else:
+            c = ''
+        sat_data = data.sel(satellite=sat).coarsen(time=10, boundary='trim').mean()
+        if isinstance(ax, PolarAxes):
+            x = sat_data['mlt'].values
+            y = sat_data['mlat'].values
+            mask = y > 30
+            x[x > 12] -= 24
+            theta = np.pi * (x - 6) / 12
+            r = 90 - y
+            ax.plot(theta[mask], r[mask], f'{c}.', ms=1)
+        else:
+            mask = ((sat_data['mlon'] > xbounds[0]) * (sat_data['mlon'] < xbounds[1]) *
+                    (sat_data['mlat'] > ybounds[0]) * (sat_data['mlat'] < ybounds[1]))
+            ax.plot(sat_data['mlon'][mask], sat_data['mlat'][mask], f'{dmsp_colors[sat]}.', ms=2)
+
+
+def plot_ne(ax, date, dataset, dt=np.timedelta64(60, 'm'), satellites=None, min_mlat=30):
+    data = dataset.sel(time=slice(date - dt / 2, date + dt / 2))
+    if satellites is None:
+        satellites = data.satellite.values
+    if 'n' in data:
+        ne = data['n']
+        colors = swarm_colors
+    else:
+        ne = data['ne']
+        colors = dmsp_colors
+    for sat in satellites:
+        sat_data = data.sel(satellite=sat).coarsen(time=4, boundary='trim').mean()
+        sat_ne = ne.sel(satellite=sat).coarsen(time=4, boundary='trim').mean()
+        x = sat_data['mlat'].values
+        y = sat_ne.values
+        mask = x > min_mlat
+        if isinstance(ax, plt.Axes):
+            ax.plot(x[mask], y[mask], f'{colors[sat]}.')
+        elif isinstance(ax, list):
+            mlt = sat_data['mlt'].values[mask]
+            mlt[mlt > 12] -= 24
+            m = (-12 <= mlt) * (mlt <= -6)
+            ax[0][0].plot(x[mask][m], y[mask][m], f'{colors[sat]}.')
+            m = (6 <= mlt) * (mlt <= 12)
+            ax[0][1].plot(x[mask][m], y[mask][m], f'{colors[sat]}.')
+            m = (-6 <= mlt) * (mlt <= 0)
+            ax[1][0].plot(x[mask][m], y[mask][m], f'{colors[sat]}.')
+            m = (0 <= mlt) * (mlt <= 6)
+            ax[1][1].plot(x[mask][m], y[mask][m], f'{colors[sat]}.')
 
 
 def plot_dmsp_hor_ion_v_mag(ax, date, dmsp, dt=np.timedelta64(60, 'm'), xbounds=(-120, 20), ybounds=(20, 80),
@@ -166,29 +451,14 @@ def plot_dmsp_hor_ion_v_mag(ax, date, dmsp, dt=np.timedelta64(60, 'm'), xbounds=
         ax.scatter(sat_data['mlong'][mask], sat_data['mlat'][mask], s=2, c=sat_data['hor_ion_v'][mask], cmap='jet', vmin=vmin, vmax=vmax)
 
 
-def plot_dmsp_location(ax, date, dmsp, dt=np.timedelta64(60, 'm'), xbounds=(-120, 20), ybounds=(20, 80)):
-    data = dmsp.sel(time=slice(date-dt/2, date+dt/2))
-    for sat in data.sat_id.values:
-        sat_data = data.sel(sat_id=sat)
-        mask = ((sat_data['mlong'] > xbounds[0]) * (sat_data['mlong'] < xbounds[1]) *
-                (sat_data['mlat'] > ybounds[0]) * (sat_data['mlat'] < ybounds[1]))
-        ax.plot(sat_data['mlong'][mask], sat_data['mlat'][mask], f'{dmsp_colors[sat]}.', ms=1)
-
-
 def plot_dmsp_hor_ion_v_timeseries(ax, date, dmsp, dt=np.timedelta64(60, 'm'), xbounds=(-125, 25), ybounds=(15, 85),
                                    mlt_ax=None):
     data = dmsp.sel(time=slice(date-dt/2, date+dt/2))
-    for sat in data.sat_id.values:
-        sat_data = data.sel(sat_id=sat)
-        mask = ((sat_data['mlong'] > xbounds[0]) * (sat_data['mlong'] < xbounds[1]) *
+    for sat in data.satellite.values:
+        sat_data = data.sel(satellite=sat)
+        mask = ((sat_data['mlon'] > xbounds[0]) * (sat_data['mlon'] < xbounds[1]) *
                 (sat_data['mlat'] > ybounds[0]) * (sat_data['mlat'] < ybounds[1]))
-        ax.plot(sat_data['mlat'][mask], sat_data['hor_ion_v'][mask], f'{dmsp_colors[sat]}-', label=f'DMSP-F{sat}')
-        # ax.plot(sat_data['mlat'][mask], sat_data['vert_ion_v'][mask], f'{dmsp_colors[sat]}-.')
-        if mlt_ax is not None:
-            mlt_ax.plot(sat_data['mlat'][mask], sat_data['mlt'][mask], f'{dmsp_colors[sat]}--')
-
-
-swarm_colors = {'A': 'k', 'B': 'm', 'C': 'c'}
+        ax.plot(sat_data['mlat'][mask], sat_data['hor_ion_v'][mask], f'{dmsp_colors[sat]}.', label=f'DMSP-F{sat}', ms=1)
 
 
 def plot_swarm_location_mag(ax, date, swarm, dt=np.timedelta64(60, 'm'), xbounds=(-180, 180), ybounds=(20, 80),
@@ -214,7 +484,7 @@ def plot_swarm_timeseries(ax, date, swarm, dt=np.timedelta64(60, 'm'), xbounds=(
         mask = ((sat_data['mlon'] > xbounds[0]) * (sat_data['mlon'] < xbounds[1]) *
                 (sat_data['mlat'] > ybounds[0]) * (sat_data['mlat'] < ybounds[1]))
         mask *= sat_data['Quality_flags'] == 4
-        ax.plot(sat_data['mlat'][mask], sat_data['Viy'][mask], f'{swarm_colors[sat]}-', label=f'SWARM-{sat}')
+        ax.plot(sat_data['mlat'][mask], sat_data['Viy'][mask], f'{swarm_colors[sat]}.', label=f'SWARM-{sat}', ms=1)
 
 
 def plot_rx_locations_mag(ax, sites, coord_sys='apex'):
@@ -440,153 +710,3 @@ def plot_tec_ipp(self, ax, date, dt, mag_coords=None, svs=None, rxs=None, min_el
                 y, x = convert.geo_to_mlt(y, x, x.time, converter=apex_converter)
                 x[x > 12] = x[x > 12] - 24
             ax.scatter(x, y, c=t.values, **plot_kwargs)
-
-
-class MagneticCoordinates:
-
-    def get_magnetic_coordinate_lines(date, coord_sys='mlt', height=0, mlat_levels=None, mlon_levels=None,
-                                      resolution=1):
-        """This is a plotting convenience function which will return the magnetic coordinate lines for a given time.
-
-        Parameters
-        ----------
-        date: datetime.datetime or numpy.datetime64
-                the time at which to find the magnetic coordinate lines
-        coord_sys: str, optional
-                the coordinate system to use for magnetic longitude, must be 'mlon' or 'mlt', default to 'mlt'
-        height: float, optional
-                the height to calculate the magnetic coordinate lines at, defaults to 0 (at surface)
-        mlat_levels: iterable, optional
-                the magnetic latitude lines to find, defaults to every 10 degrees from -80 to 80
-        mlon_levels: iterable, optional
-                the magnetic longitude lines to find, defaults to every 3 hours from 0 to 24
-        resolution: float, optional
-                resolution of the magnetic coordinate lines, defaults to 1 degree latitude and longitude
-
-        Returns
-        -------
-        dictionary
-                keys: 'mlat' and 'mlon'
-                each key points to a dictionary whose keys are the requested levels for that coordinate and whose
-                values are a list of (N x 2) arrays each describing a single line to draw
-
-        """
-        # input checking
-        if isinstance(date, np.datetime64):
-            date = datetime64_to_datetime(date)
-        if mlat_levels is None:
-            mlat_levels = np.arange(-80, 90, 10)
-        if mlon_levels is None:
-            if coord_sys == 'mlt':
-                mlon_levels = np.arange(0, 24, 3)
-            elif coord_sys == 'apex':
-                mlon_levels = np.arange(0, 360, 45)
-        # create grid, convert to magnetic
-        glon, glat = np.meshgrid(np.arange(-180, 180, resolution), np.arange(-90, 90.1, resolution))
-        apex_converter = apexpy.Apex(date=date)
-        mag_lat, mag_lon = apex_converter.convert(glat, glon, 'geo', coord_sys, datetime=date, height=height)
-
-        magnetic_coordinate_lines = {'mlat': {}, 'mlon': {}}
-        # identify each magnetic latitude line
-        for level in mlat_levels:
-            magnetic_coordinate_lines['mlat'][level] = []
-            lines = measure.find_contours(mag_lat, level)
-            for line in lines:
-                lon = line[:, 1] - 180
-                lat = line[:, 0] - 90
-                magnetic_coordinate_lines['mlat'][level].append(np.column_stack((lon, lat)))
-
-        # deal with discontinuity
-        y_diff = np.diff(mag_lon, axis=0, prepend=mag_lon[-1, None])
-        x_diff = np.diff(mag_lon, axis=1, prepend=mag_lon[:, -1, None])
-        diff_mag = x_diff ** 2 + y_diff ** 2
-        mask = diff_mag < 10
-        # identify each magnetic longitude line except for boundary lines
-        for level in mlon_levels:
-            if level in [0, 24, 360]:
-                continue
-            magnetic_coordinate_lines['mlon'][level] = []
-            lines = measure.find_contours(mag_lon, level, mask=mask)
-            for line in lines:
-                lon = line[:, 1] - 180
-                lat = line[:, 0] - 90
-                magnetic_coordinate_lines['mlon'][level].append(np.column_stack((lon, lat)))
-
-        for level in [0, 24, 360]:
-            if level in mlon_levels:
-                magnetic_coordinate_lines['mlon'][level] = []
-                param = np.linspace(-90, 90, 100)
-                lat, lon = apex_converter.convert(param, level, coord_sys, 'geo', height=height, datetime=date)
-                magnetic_coordinate_lines['mlon'][level].append(np.column_stack((lon, lat)))
-
-        return magnetic_coordinate_lines
-
-    def _add(self, ax, date_range):
-        # get parameters, set defaults
-        coord_sys = self.params['coordinate_system']
-        mlon_levels = self.params['xlocs']
-        mlat_levels = self.params['ylocs']
-        height = self.params['height']
-        line_color = self.params['line_color']
-        line_width = self.params['line_width']
-        line_style = self.params['line_style']
-        mag_coord_lines = utils.get_magnetic_coordinate_lines(date_range.start, coord_sys, height, mlat_levels, mlon_levels)
-        for level, lines in mag_coord_lines['mlon'].items():
-            for line in lines:
-                self.plotted_objects += ax.plot(line[:, 0], line[:, 1], c=line_color, lw=line_width, ls=line_style,
-                                                zorder=90, transform=ccrs.PlateCarree())
-        for level, lines in mag_coord_lines['mlat'].items():
-            for line in lines:
-                self.plotted_objects += ax.plot(line[:, 0], line[:, 1], c=line_color, lw=line_width, ls=line_style,
-                                                zorder=90, transform=ccrs.PlateCarree())
-
-
-class Terminator:
-
-    def get_terminator(self, time, alt_km=0, resolution=1):
-        """This is a plotting convenience function which will return the terminator (sun boundary) lines for a given time.
-
-        Parameters
-        ----------
-        time: datetime-like, anything that can be passed to astropy.time.Time.
-                Time to get terminator lines for. Only pass in one.
-        alt_km: float
-                altitude to get terminator lines for
-        resolution: float
-                resolution of resulting terminator lines
-
-        Returns
-        -------
-        list of shape (N, ) ndarrays
-                longitudes of each line
-        list of shape (N, ) ndarrays
-                latitudes of each line
-        """
-        glon, glat = np.meshgrid(np.arange(-180, 180, resolution), np.arange(-90, 90.1, resolution))
-
-        sun_el = utils.get_sun_elevation(time, glon, glat)
-        r_e = aconst.R_earth.to('km').value
-        horizon = np.rad2deg(np.arccos(r_e / (r_e + alt_km)))
-        terminators = measure.find_contours(sun_el, -1 * horizon)
-        x = []
-        y = []
-        for terminator in terminators:
-            x.append(terminator[:, 1] - 180)
-            y.append(terminator[:, 0] - 90)
-
-        return x, y
-
-    def _add(self, ax, date_range):
-        date = date_range.start
-        if isinstance(date, np.datetime64):
-            date = trough.utils.datetime64_to_datetime(date_range)
-        altitude = self.params['altitude']
-        line_color = self.params['line_color']
-        line_width = self.params['line_width']
-        line_style = self.params['line_style']
-        term_lons, term_lats = trough.utils.get_terminator(date, alt_km=altitude)
-        for lon, lat in zip(term_lons, term_lats):
-            self.plotted_objects += ax.plot(np.unwrap(lon, 180), np.unwrap(lat, 90), c=line_color,
-                                            lw=line_width, ls=line_style, zorder=90, transform=ccrs.PlateCarree())
-
-

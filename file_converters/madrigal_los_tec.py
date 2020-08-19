@@ -8,24 +8,37 @@ import datetime
 
 from trough import convert
 
-input_folder = "E:\\dmsp"
-output_file = "E:\\dmsp\\2018_dmsp.nc"
+input_folder = "E:\\los_tec"
+output_file = "E:\\los_tec\\2018_los_tec.nc"
 
-variables = ['gdlat', 'glon', 'gdalt', 'ne', 'hor_ion_v', 'vert_ion_v']
-satellites = [15, 16, 17, 18]  # todo: automatically determine satellites
-dataset = {var: {sat: [] for sat in satellites} for var in variables}
-dataset['mlat'] = {sat: [] for sat in satellites}
-dataset['mlon'] = {sat: [] for sat in satellites}
-dataset['mlt'] = {sat: [] for sat in satellites}
+variables = ["los_tec", "tec", "azm", "elm"]
+satellites = list(range(1, 32))
+dataset = {var: None for var in variables}
 
-files = glob.glob(os.path.join(input_folder, '*.hdf5'))
+files = glob.glob(os.path.join(input_folder, '*.h5'))
 converter = apexpy.Apex(datetime.datetime(2018, 10, 1))
 for file in files:
     print(file)
     with h5py.File(file, 'r') as f:
         data = f['Data/Table Layout'][()]
-    sat = data['sat_id'][0]
+
+    el_mask = data['elm'] >= 40
+    zero_mask = data['tec'] > 0
+    lat_mask = data['gdlat'] > 45
+    lon_mask = (data['glon'] > -170) * (data['glon'] < -10)
+    mask = el_mask * zero_mask * lat_mask
+    data = data[mask]
+
+    sat = data['sat_id']
+    rx = data['gps_site']
     times = data['ut1_unix'] * np.timedelta64(1, 's') + np.datetime64("1970-01-01T00:00:00")
+
+    unique_sat = np.unique(sat)
+    unique_rx = np.unique(rx)
+    unique_times = np.unique(times)
+
+    d = np.empty_like(data, shape=unique_times.shape + unique_rx.shape + unique_sat.shape)
+
     for var in variables:
         array = xr.DataArray(data[var][:, None], dims=['time', 'satellite'], coords={'time': times, 'satellite': [sat]})
         dataset[var][sat].append(array)

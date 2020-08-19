@@ -9,6 +9,7 @@ import astropy.time as at
 import astropy.units as u
 import glob
 import re
+from scipy.interpolate import UnivariateSpline
 
 
 def read_converted_tec_h5(fn):
