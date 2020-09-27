@@ -63,7 +63,7 @@ def format_polar_mag_ax(ax):
 ########################################################################################################################
 # BORDERS ##############################################################################################################
 ########################################################################################################################
-def plot_mlt_lines_mag(ax, date, mlt_vals=np.arange(-6, 7, 3)):
+def plot_mlt_lines(ax, date, mlt_vals=np.arange(-6, 7, 3)):
     date = utils.datetime64_to_datetime(date.values)
     converter = apexpy.Apex(date=date)
     mlon = converter.mlt2mlon(mlt_vals, date)
@@ -71,6 +71,21 @@ def plot_mlt_lines_mag(ax, date, mlt_vals=np.arange(-6, 7, 3)):
     ax.vlines(mlon, 20, 80, colors='w', linestyles='--')
     for i in range(mlt_vals.shape[0]):
         ax.text(mlon[i], 20, str(mlt_vals[i]), color='w')
+
+
+def plot_mlat_lines(ax, glat, glon, mlat_vals=np.arange(30, 90, 10), color='grey'):
+    converter = apexpy.Apex(date=datetime.datetime.now())
+    mlat, mlon = converter.convert(glat.ravel(), glon.ravel(), 'geo', 'apex', height=350)
+    mlat = mlat.reshape(glat.shape)
+    for mv in mlat_vals:
+        lines = measure.find_contours(mlat, mv)
+        x = []
+        y = []
+        for line in lines:
+            x.append(line[:, 1] + glon[0, 0])
+            y.append(line[:, 0] + glat[0, 0])
+        for lon, lat in zip(x, y):
+            ax.plot(lon, lat, c=color, lw=1)
 
 
 def plot_solar_terminator(ax, date, altitude=300, **plot_kwargs):
@@ -216,7 +231,8 @@ def plot_tec_trough(ax, date, troughs, coord_sys='mlt', **plot_kwargs):
         else:
             theta = np.pi * (x - 90) / 180
         r = 90 - y
-        ax.contourf(theta, r, troughs.values, levels=1, colors='none', hatches=[None, '////'], **plot_kwargs)
+        # ax.contourf(theta, r, troughs.values, levels=1, colors='none', hatches=[None, '////'], **plot_kwargs)
+        ax.pcolormesh(theta, r, troughs.values, **plot_kwargs)
     else:
         return
 

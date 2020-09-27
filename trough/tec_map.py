@@ -6,9 +6,9 @@ from sklearn.cluster import MiniBatchKMeans
 from skimage import filters
 
 
-def get_troughs(features, lr):
+def get_troughs(features, lr, high_th=.7, low_th=.6):
     probabilty = lr.predict_proba(features.values.reshape((-1, 4)))[:, 1].reshape(features.shape[:-1])
-    troughs = probabilty > .7
+    troughs = probabilty > high_th
     # troughs = MiniBatchKMeans(n_clusters=2).fit_predict(features.values.reshape((-1, 4))).reshape(features.shape[:-1])
     # troughs = np.zeros_like(probabilty)
     # for i in range(probabilty.shape[0]):
@@ -64,6 +64,14 @@ def get_lr(features, troughs, dt=np.timedelta64(60, 'm'), dmlon=5, mlat_extra=1)
 
 def get_features(tec_map):
     """
+        - curvatuyre
+        - low val
+        - pwall
+        - e wall
+        - mlt*
+        - lat*
+        - doy*
+        - other distances for walls
 
     Parameters
     ----------

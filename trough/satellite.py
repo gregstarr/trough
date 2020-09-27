@@ -29,15 +29,14 @@ def find_troughs_swarm(data):
     -------
     troughs: xr.DataArray
     """
-    median_filtered = np.log(data['n'].rolling(time=3, center=True, min_periods=1).median())
-    detrended = median_filtered - median_filtered.rolling(time=481, center=True, min_periods=50).mean()
     troughs = {}
+    detrended = get_detrended_ne(data)
     for sat in data.satellite.values:
         sat_trough_params = {key: [] for key in ['min', 'poleward', 'equatorward', 'mlon', 'mlt', 'trough']}
         sat_trough_time = []
 
         ne = detrended.sel(satellite=sat)
-        sat_data = data.sel(satellite=sat).chunk({'time': -1}).interpolate_na(dim='time', method='linear')
+        sat_data = data.sel(satellite=sat).chunk({'time': -1}).interpolate_na(dim='time', method='linear').load()
         mlat = sat_data['mlat']
         mlon = sat_data['mlon']
         mlt = sat_data['mlt']
@@ -75,11 +74,28 @@ def find_troughs_swarm(data):
     return troughs
 
 
+def get_detrended_ne(data):
+    median_filtered = np.log(data['n'].rolling(time=3, center=True, min_periods=1).median())
+    detrended = median_filtered - median_filtered.rolling(time=481, center=True, min_periods=50).mean()
+    output = np.empty(detrended.shape)
+    chunk_size = 5_000_000
+    total_chunks = int(np.ceil(detrended.shape[0] / chunk_size))
+    print("TOTAL CHUNKS: ", total_chunks)
+    for sat in range(3):
+        for chunk in range(total_chunks):
+            print(chunk)
+            idx = slice(chunk * chunk_size, (chunk + 1) * chunk_size)
+            output[idx, sat] = detrended[idx, sat].values
+    return xr.DataArray(output, dims=['time', 'satellite'],
+                        coords={'time': data.time.values, 'satellite': data.satellite.values})
+
+
 def determine_segments(mlat):
     in_region = (mlat >= 45) * (mlat <= 75)
     boundary = np.diff(in_region.values.astype(int))
     entering = np.argwhere(boundary == 1)[:, 0]
     exiting = np.argwhere(boundary == -1)[:, 0]
+    exiting = exiting[exiting > entering[0]]
     segments = min(entering.shape[0], exiting.shape[0])
     assert np.all((exiting[:segments] - entering[:segments]) > 0)
     return entering[:segments], exiting[:segments]
