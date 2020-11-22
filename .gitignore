@@ -105,3 +105,6 @@ venv.bak/
 
 # pycharm related files
 .idea
+
+# tf checkpoints
+dl/cp

@@ -31,7 +31,7 @@ def convert_average(tec, timestamps, lat, lon, bins, nmaps=12):
     return mag_tec
 
 
-def process_month(files, bins, output_pattern, nmaps=24):
+def process_month(files, bins, output_pattern, nmaps=12):
     if not files:
         return
     mlat = (bins[0][:-1] + bins[0][1:]) / 2
@@ -67,16 +67,16 @@ download_dir = os.path.join("E:", "tec_data", "download")
 pattern = "gps{year:02d}{month:02d}*.hdf5"
 h5_path = os.path.join(download_dir, pattern)
 output_dir = os.path.join("E:", "tec_data")
-output_pattern = "{year:02d}_{month:02d}_tec.h5"
+output_pattern = "{year:04d}_{month:02d}_tec.h5"
 output_path = os.path.join(output_dir, output_pattern)
 
 # make grid file
 with h5py.File(os.path.join(output_dir, 'grid.h5'), 'w') as f:
-    f.create_dataset('mlat', data=mlat)
+    f.create_dataset('mlat', data=mlat[mlat >= 30])
     f.create_dataset('mlt', data=mlt)
 
 # make dset
-for year in range(21):
-    for month in range(1, 13):
+for year in range(19, 20):
+    for month in range(1, 2):
         print(f"YEAR: {year}, MONTH: {month}")
         process_month(glob.glob(h5_path.format(year=year, month=month)), bins, output_path)
