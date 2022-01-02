@@ -1,5 +1,7 @@
 import logging
+import ssl
 
+import trough
 from trough import config, InvalidConfiguration
 import trough._download as trough_download
 
@@ -26,7 +28,7 @@ def download_arb(start_date, end_date):
 
 def download_omni(start_date, end_date):
     logger.info(f"running 'download_omni', start date: {start_date}, end date: {end_date}")
-    downloader = trough_download.OmniDownloader(config.download_arb_dir)
+    downloader = trough_download.OmniDownloader(config.download_omni_dir)
     downloader.download(start_date, end_date)
     logger.info("'download_omni' completed")
 

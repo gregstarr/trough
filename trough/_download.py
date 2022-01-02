@@ -88,8 +88,8 @@ class NasaSpdfDownloader(Downloader, abc.ABC):
 
 class AuroralBoundaryDownloader(NasaSpdfDownloader):
 
-    def __init__(self, download_dir):
-        super().__init__(download_dir)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.satellites = ['dmspf16', 'dmspf17', 'dmspf18', 'dmspf19']
 
     def download(self, start_date, end_date):

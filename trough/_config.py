@@ -10,6 +10,7 @@ import dataclasses
 from pathlib import Path
 import appdirs
 import json
+import contextlib
 
 
 class InvalidConfiguration(Exception):
@@ -101,3 +102,25 @@ class Config:
         save_dict['trough_id_params'] = self.trough_id_params.dict()
         with open(self.config_path, 'w') as f:
             json.dump(save_dict, f)
+
+    def set_base_dir(self, base_dir):
+        data_dirs = _get_default_directory_structure(base_dir)
+        self.load_dict(data_dirs)
+
+    def dict(self):
+        param_dict = self.__dict__.copy()
+        param_dict['trough_id_params'] = self.trough_id_params.dict()
+        return param_dict
+
+    @contextlib.contextmanager
+    def temp_config(self, **kwargs):
+        original_params = self.dict().copy()
+        new_params = original_params.copy()
+        new_params.update(**kwargs)
+        if 'base_dir' in kwargs:
+            new_params.update(**_get_default_directory_structure(kwargs['base_dir']))
+        try:
+            self.load_dict(new_params)
+            yield self
+        finally:
+            self.load_dict(original_params)
