@@ -1,149 +1,156 @@
-import h5py
 import numpy as np
 import datetime
-import pandas as pd
-import xarray as xr
-import os
-import astropy.coordinates as ac
-import astropy.time as at
-import astropy.units as u
-import glob
-import re
-from scipy.interpolate import UnivariateSpline
 
 
-def read_converted_tec_h5(fn):
-    """Opens one of Sebastijan's H5 GPS TEC files
+def datetime64_to_timestamp(dt64):
+    """Convert single / array of numpy.datetime64 to timestamps (seconds since epoch)
 
     Parameters
     ----------
-    fn: string
-            filename to open, must be an H5 file
+    dt64: numpy.ndarray[datetime64]
 
     Returns
     -------
-    dictionary
-            contains the following keys:
-            - time (T, )
-            - longitude (M, )
-            - latitude (N, )
-            - TEC (T, M, N)
+    timestamp: numpy.ndarray[float]
     """
-    with h5py.File(fn, 'r') as f:
-        t = pd.to_datetime(f['GPSTEC/time'][()], unit='s')
-        lon = f['GPSTEC/lon'][()]
-        lat = f['GPSTEC/lat'][()]
-        images = f['GPSTEC/im'][()]
-    return {'time': t, 'longitude': lon, 'latitude': lat, 'tec': images}
-
-
-def convert_sebs_h5_to_nc(fn, data_folder="E:\\tec_data\\data"):
-    """converts one of Sebastijan's H5 GPS TEC files to NetCDF using xarray
-
-    Parameters
-    ----------
-    fn: string
-            input filename
-    data_folder: string
-            output folder
-
-    Returns
-    -------
-    string
-            converted filename
-    """
-    data_dict = read_converted_tec_h5(fn)
-    coords = [data_dict['time'], data_dict['longitude'], data_dict['latitude']]
-    dims = ['time', 'longitude', 'latitude']
-    data_array = xr.DataArray(data=data_dict['tec'], coords=coords, dims=dims, name='tec')
-    dt_accessor = data_array.time[0].dt
-    nc_file_name = os.path.join(data_folder, f"{dt_accessor.year.item():04d}{dt_accessor.month.item():02d}{dt_accessor.day.item():02d}_tec.nc")
-    data_array.to_netcdf(nc_file_name)
-    return nc_file_name
-
-
-def convert_all_sebs_data():
-    """converts all of Sebastijan's h5 data to NetCDF using xarray
-    """
-    base_dir = "E:\\tec_data\\data"
-    for root, dirnames, files in os.walk(base_dir):
-        for file in files:
-            if 'conv' in file:
-                full_file_path = os.path.join(root, file)
-                try:
-                    print(convert_sebs_h5_to_nc(full_file_path))
-                except Exception as e:
-                    print(e)
+    return (dt64 - np.datetime64('1970-01-01T00:00:00')) / np.timedelta64(1, 's')
 
 
 def datetime64_to_datetime(dt64):
-    """convert a numpy.datetime64 to a datetime.datetime
+    """Convert single datetime64 to datetime
 
     Parameters
     ----------
-    dt64: numpy.datetime64
-            the datetime64 to convert
+    dt64: numpy.ndarray[datetime64]
 
     Returns
     -------
-    datetime.datetime
-            the converted object
+    list[datetime]
     """
-    ts = (dt64 - np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 's')
+    ts = datetime64_to_timestamp(dt64)
+    if isinstance(ts, np.ndarray):
+        return [datetime.datetime.utcfromtimestamp(t) for t in ts]
     return datetime.datetime.utcfromtimestamp(ts)
 
 
-def timestamp_to_datetime(ts):
-    return datetime.datetime.utcfromtimestamp(ts)
-
-
-def get_sun_elevation(time, glon, glat):
-    """Returns the sun elevation angle in degrees given a single time and arrays of geographic longitudes and latitudes
+def decompose_datetime64(dt64):
+    """Convert array of np.datetime64 to an array (N x 3) of year, month (jan=1), day (1 index)
 
     Parameters
     ----------
-    time: datetime-like, anything that can be passed to astropy.time.Time.
-            Time to get elevation for. Only pass in one.
-    glon: array-like (M x N)
-            geographic longitudes
-    glat: array-like (M x N)
-            geographic latitudes
+    dt64: numpy.ndarray[datetime64]
 
     Returns
     -------
-    array-like (M x N)
-            sun elevation angles
+    idx: numpy.ndarray (N x 3)
     """
-    locations = ac.EarthLocation(lat=glat.ravel() * u.deg, lon=glon.ravel() * u.deg)
-    t = at.Time(time)
-    sun = ac.get_sun(t)
-    alt = sun.transform_to(ac.AltAz(obstime=t, location=locations)).alt.value
-    return alt.reshape(glon.shape)
+    year_floor = dt64.astype('datetime64[Y]')
+    month_floor = dt64.astype('datetime64[M]')
+
+    year = year_floor.astype(int) + 1970
+    month = (dt64.astype('datetime64[M]') - year_floor).astype(int) + 1
+    day = (dt64.astype('datetime64[D]') - month_floor).astype(int) + 1
+
+    return np.column_stack((year, month, day))
 
 
-def get_mahali_files(data_dir="E:\\tec_data\\data\\rinex"):
-    """Get all the rinex files for Mahali
+def no_ext_fn(fn):
+    """return name of file with no path or extension
 
     Parameters
     ----------
-    data_dir: string
-            base directory which holds all the rinex files
+    fn: str
 
     Returns
     -------
-    obs_file_dict: dictionary
-            {receiver name: observation files for the receiver, ...}
-    nav_file_dict: dictionary
-            {folder name (should be date): navigation file for that day, ...}
+    str
     """
-    obs_files = glob.glob(os.path.join(data_dir, '*', '*.15o'))
-    nav_files = glob.glob(os.path.join(data_dir, '*', '*.15n'))
-    names = list(set(os.path.basename(fn)[:4] for fn in obs_files))
-    obs_file_dict = {"MAH"+re.search("(\\d+)", name).group(1): [fn for fn in obs_files if name in fn] for name in names}
-    nav_file_dict = {}
-    for fn in nav_files:
-        day = os.path.basename(os.path.dirname(fn))
-        if day in nav_file_dict:
-            continue
-        nav_file_dict[day] = fn
-    return obs_file_dict, nav_file_dict
+    return os.path.splitext(os.path.basename(fn))[0]
+
+
+def centered_bn_func(func, arr, window_diameter, pad=False, **kwargs):
+    """Call a centered bottleneck moving window function on an array, optionally padding with the edge values to keep
+    the same shape. Window moves through axis 0.
+
+    Parameters
+    ----------
+    func: bottleneck moving window function
+    arr: numpy.ndarray
+    window_diameter: int
+        odd number window width
+    pad: bool
+        whether to pad to keep same shape or not
+    kwargs
+        passed to func
+
+    Returns
+    -------
+    numpy.ndarray
+    """
+    window_radius = window_diameter // 2
+    assert (2 * window_radius + 1) == window_diameter, "window_diameter must be odd"
+    if pad:
+        pad_tuple = ((window_radius, window_radius), ) + ((0, 0), ) * (arr.ndim - 1)
+        arr = np.pad(arr, pad_tuple, mode='edge')
+    return func(arr, window_diameter, **kwargs)[2 * window_radius:]
+
+
+def moving_func_trim(window_diameter, *arrays):
+    """Trim any number of arrays to valid dimension after calling a centered bottleneck moving window function
+
+    Parameters
+    ----------
+    window_diameter: int
+        odd number window width
+    arrays: 1 or more numpy.ndarray
+
+    Returns
+    -------
+    tuple of numpy.ndarrays
+    """
+    window_radius = window_diameter // 2
+    assert (2 * window_radius + 1) == window_diameter, "window_diameter must be odd"
+    if window_radius == 0:
+        return (array for array in arrays)
+    return (array[window_radius:-window_radius] for array in arrays)
+
+
+def extract_patches(arr, patch_shape, step=1):
+    """Assuming `arr` is 3D (time, lat, lon). `arr` will be padded, then have patches extracted using
+    `skimage.util.view_as_windows`. The padding will be "edge" for lat, and "wrap" for lon, with no padding for
+    time. Returned array will have same lat and lon dimension length as input and a different time dimension length
+    depending on `patch_shape`.
+
+    Parameters
+    ----------
+    arr: numpy.ndarray
+        must be 3 dimensional
+    patch_shape: tuple
+        must be length 3
+    step: int
+    Returns
+    -------
+    patches view of padded array
+        shape (arr.shape[0] - patch_shape[0] + 1, arr.shape[1], arr.shape[2]) + patch_shape
+    """
+    assert arr.ndim == 3 and len(patch_shape) == 3, "Invalid input args"
+    # lat padding
+    padded = np.pad(arr, ((0, 0), (patch_shape[1] // 2, patch_shape[1] // 2), (0, 0)), 'edge')
+    # lon padding
+    padded = np.pad(padded, ((0, 0), (0, 0), (patch_shape[2] // 2, patch_shape[2] // 2)), 'wrap')
+    patches = view_as_windows(padded, patch_shape, step)
+    return patches
+
+
+def write_h5(fn, **kwargs):
+    """Writes an h5 file with data specified by kwargs.
+
+    Parameters
+    ----------
+    fn: str
+        file path to write
+    **kwargs
+    """
+    with h5py.File(fn, 'w') as f:
+        for key, value in kwargs.items():
+            f.create_dataset(key, data=value)

@@ -1,20 +1,15 @@
 name: trough
+channels:
+  - conda-forge
 dependencies:
-   - python=3.7
-   - matplotlib
    - numpy
-   - xarray
-   - pandas
-   - cartopy
-   - pip
+   - scipy
    - pytest
-   - astropy
+   - h5py
+   - scikit-image
    - scikit-learn
+   - appdirs
+   - pip
    - pip:
-      - pymap3d
-      - igrf12
-      - h5py
-      - unlzw2
-      - tensorflow
-# Manual install
-# apexpy - https://github.com/space-physics/apexpy
+      - apexpy
+      - madrigalWeb

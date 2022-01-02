@@ -1,2 +1,5 @@
-from trough import utils
-from trough import gps
+from ._config import Config, InvalidConfiguration
+
+config = Config()
+
+from . import scripts
