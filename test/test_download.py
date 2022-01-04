@@ -2,6 +2,7 @@ from datetime import datetime
 from pathlib import Path
 import tempfile
 import h5py
+import pytest
 
 import trough
 
@@ -23,22 +24,32 @@ def test_download_tec():
                 assert 'tec' in f['Data/Array Layout/2D Parameters']
 
 
-def test_download_omni():
+@pytest.mark.parametrize('method', ['ftp', 'http'])
+def test_download_omni(skip_ftp, method):
+    if method == 'ftp' and skip_ftp:
+        pytest.skip("Skipping because 'skip_ftp' set to True")
     start_date = datetime(2021, 1, 1)
     end_date = datetime(2021, 1, 1)
     with tempfile.TemporaryDirectory() as tempdir:
-        with trough.config.temp_config(base_dir=tempdir) as cfg:
+        with trough.config.temp_config(base_dir=tempdir, nasa_spdf_download_method=method) as cfg:
             trough.scripts.download_omni(start_date, end_date)
             omni_files = list(Path(cfg.download_omni_dir).glob('*'))
-        print()
+        assert len(omni_files) == 1
+        assert omni_files[0].name == 'omni2_2021.dat'
 
 
-def test_download_arb():
+@pytest.mark.parametrize('method', ['ftp', 'http'])
+def test_download_arb(skip_ftp, method):
+    if method == 'ftp' and skip_ftp:
+        pytest.skip("Skipping because 'skip_ftp' set to True")
     start_date = datetime(2021, 1, 1)
     end_date = datetime(2021, 1, 1)
     with tempfile.TemporaryDirectory() as tempdir:
-        with trough.config.temp_config(base_dir=tempdir) as cfg:
+        with trough.config.temp_config(base_dir=tempdir, nasa_spdf_download_method=method) as cfg:
             trough.scripts.download_arb(start_date, end_date)
             arb_files = list(Path(cfg.download_arb_dir).glob('*'))
-        print()
-
+        assert len(arb_files) > 0
+        for file in arb_files:
+            assert file.suffix == '.nc'
+            with h5py.File(file) as f:
+                assert 'MODEL_NORTH_GEOGRAPHIC_LATITUDE' in f.keys()

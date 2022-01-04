@@ -1,7 +1,5 @@
 import logging
-import ssl
 
-import trough
 from trough import config, InvalidConfiguration
 import trough._download as trough_download
 
@@ -21,14 +19,26 @@ def download_tec(start_date, end_date):
 
 def download_arb(start_date, end_date):
     logger.info(f"running 'download_arb', start date: {start_date}, end date: {end_date}")
-    downloader = trough_download.AuroralBoundaryDownloader(config.download_arb_dir)
+    if config.nasa_spdf_download_method == 'ftp':
+        downloader = trough_download.AuroralBoundaryFtpDownloader(config.download_arb_dir)
+    elif config.nasa_spdf_download_method == 'http':
+        downloader = trough_download.AuroralBoundaryHttpDownloader(config.download_arb_dir)
+    else:
+        raise InvalidConfiguration(f"nasa spdf download method (given: {config.nasa_spdf_download_method}) "
+                                   f"must be 'ftp' or 'http'")
     downloader.download(start_date, end_date)
     logger.info("'download_arb' completed")
 
 
 def download_omni(start_date, end_date):
     logger.info(f"running 'download_omni', start date: {start_date}, end date: {end_date}")
-    downloader = trough_download.OmniDownloader(config.download_omni_dir)
+    if config.nasa_spdf_download_method == 'ftp':
+        downloader = trough_download.OmniFtpDownloader(config.download_omni_dir)
+    elif config.nasa_spdf_download_method == 'http':
+        downloader = trough_download.OmniHttpDownloader(config.download_omni_dir)
+    else:
+        raise InvalidConfiguration(f"nasa spdf download method (given: {config.nasa_spdf_download_method}) "
+                                   f"must be 'ftp' or 'http'")
     downloader.download(start_date, end_date)
     logger.info("'download_omni' completed")
 

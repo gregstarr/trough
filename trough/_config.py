@@ -73,6 +73,7 @@ class Config:
         self.madrigal_user_name = None
         self.madrigal_user_email = None
         self.madrigal_user_affil = None
+        self.nasa_spdf_download_method = 'ftp'
 
         self.config_path = Path(__file__).parent / 'trough.json'
 
@@ -95,6 +96,7 @@ class Config:
         self.madrigal_user_name = config_dict.get('madrigal_user_name', self.madrigal_user_name)
         self.madrigal_user_email = config_dict.get('madrigal_user_email', self.madrigal_user_email)
         self.madrigal_user_affil = config_dict.get('madrigal_user_affil', self.madrigal_user_affil)
+        self.nasa_spdf_download_method = config_dict.get('nasa_spdf_download_method', self.nasa_spdf_download_method)
 
     def save(self):
         save_dict = self.__dict__.copy()
