@@ -11,6 +11,7 @@ from pathlib import Path
 import appdirs
 import json
 import contextlib
+import typing
 
 
 class InvalidConfiguration(Exception):
@@ -19,7 +20,7 @@ class InvalidConfiguration(Exception):
 
 @dataclasses.dataclass
 class TroughIdParams:
-    bg_est_shape: tuple[int] = (1, 19, 17)
+    bg_est_shape: typing.Tuple[int, int, int] = (1, 19, 17)
     model_weight_max: float = 15
     rbf_bw: int = 1
     tv_hw: float = 2
