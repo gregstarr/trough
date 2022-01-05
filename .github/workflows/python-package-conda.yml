@@ -1,43 +1,36 @@
-name: Python Package using Conda
-
+name: Use Setup-Miniconda From Marketplace
 on: [push]
 
 jobs:
-  build:
+  miniconda:
+    name: Miniconda ${{ matrix.os }}, ${{ matrix.python-version }
     runs-on: ${{ matrix.os }}
     strategy:
-      matrix:
-        python-version:
-          - 3.10.*
-          - 3.9
-          - 3.8
-          - 3.7
-        os:
-          - ubuntu-latest
-          - windows-latest
-      max-parallel: 5
-
+        matrix:
+            os: ["ubuntu-latest", "windows-latest"]
+            python-version: ['3.7', '3.8', '3.9', '3.10.*']
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        $CONDA/bin/conda env update --file environment.yml --name base
-    - name: Install trough
-      run: |
-        python setup.py install
-#    - name: Lint with flake8
-#      run: |
-#        conda install flake8
-#        # stop the build if there are Python syntax errors or undefined names
-#        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-#        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-#        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Test with pytest
-      run: |
-        $CONDA/bin/conda install pytest
-        cd test
-        pytest
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: trough
+          environment-file: environment.yml
+          python-version: ${{ matrix.python-version }}
+          auto-activate-base: false
+          auto-update-conda: true
+      - shell: bash -l {0}
+        run: |
+          conda info
+          conda list
+#      - name: Lint
+#        shell: bash -l {0}
+#        run: |
+#            conda install flake8
+#            python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+#            python -m flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      - name: Run pytest
+        shell: bash -l {0}
+        run: |
+            conda install pytest
+            cd test
+            pytest
