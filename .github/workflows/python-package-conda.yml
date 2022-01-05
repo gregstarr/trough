@@ -37,5 +37,6 @@ jobs:
         name: Run pytest
         run: |
             conda install pytest
+            pip install pytest-html
             cd test
-            python -m pytest
+            python -m pytest --html=results.html
