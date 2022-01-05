@@ -10,6 +10,7 @@ dependencies:
    - scikit-learn
    - appdirs
    - bs4
+   - pytables
    - pip
    - pip:
       - apexpy
