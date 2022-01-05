@@ -4,7 +4,6 @@ channels:
 dependencies:
    - numpy
    - scipy
-   - pytest
    - h5py
    - scikit-image
    - scikit-learn
