@@ -109,7 +109,7 @@ class AuroralBoundaryFtpDownloader(NasaSpdfFtpDownloader):
         self.satellites = ['dmspf16', 'dmspf17', 'dmspf18', 'dmspf19']
 
     def _get_file_list(self, start_date, end_date):
-        n_days = math.ceil((end_date - start_date) / timedelta(days=1))
+        n_days = math.ceil((end_date - start_date) / timedelta(days=1)) + 1
         days = [start_date + timedelta(days=t) for t in range(n_days)]
         years = set([date.year for date in days])
         date_struct = {year: [_doy(date) for date in days if date.year == year] for year in years}
