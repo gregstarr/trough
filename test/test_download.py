@@ -14,12 +14,10 @@ def test_download_tec(test_dates):
             trough.scripts.download_tec(*test_dates)
             tec_files = list(Path(cfg.download_tec_dir).glob('*'))
             tec_file_names = [file.stem[:-4] for file in Path(cfg.download_tec_dir).glob('*')]
-        assert len(tec_file_names) == 2
-        assert 'gps201231g' in tec_file_names
+        assert len(tec_file_names) == 1
         assert 'gps210101g' in tec_file_names
-        for tec_file in tec_files:
-            with h5py.File(tec_file) as f:
-                assert 'tec' in f['Data/Array Layout/2D Parameters']
+        with h5py.File(tec_files[0]) as f:
+            assert 'tec' in f['Data/Array Layout/2D Parameters']
 
 
 @pytest.mark.parametrize('method', ['ftp', 'http'])
