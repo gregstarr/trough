@@ -1,5 +1,6 @@
 import numpy as np
 import pandas
+from pathlib import Path
 
 from trough import config
 
@@ -24,6 +25,12 @@ def open_downloaded_omni_file(fn):
     data = pandas.DataFrame(data)
     data.index = dates
     return data.drop(columns=['year', 'hour', 'decimal_day'])
+
+
+def get_omni_data(start_date, end_date):
+    path = Path(config.processed_omni_dir) / 'omni.h5'
+    data = pandas.read_hdf(path, key='data')
+    return data[start_date:end_date]
 
 
 def get_arb_data(start_date, end_date, dt=np.timedelta64(1, 'h'), data_dir=None):
@@ -82,5 +89,15 @@ def open_arb_file(fn):
     return arb_mlat, times
 
 
-def prepare_auroral_boundary_dataset():
+def process_auroral_boundary_dataset():
     ...
+
+
+def process_omni_dataset(start_date, end_date):
+    output_path = Path(config.processed_omni_dir) / 'omni.h5'
+    data = []
+    for path in Path(config.download_omni_dir).glob('*.dat'):
+        data.append(open_downloaded_omni_file(path))
+    data = pandas.concat(data)
+    data = data[start_date:end_date]
+    data.to_hdf(output_path, 'data')

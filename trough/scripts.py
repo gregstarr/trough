@@ -1,7 +1,9 @@
 import logging
+from pathlib import Path
 
 from trough import config, InvalidConfiguration
 import trough._download as trough_download
+import trough._aux_data as trough_prepare
 
 
 logger = logging.getLogger(__name__)
@@ -58,7 +60,8 @@ def process_arb(start_date, end_date):
 
 
 def process_omni(start_date, end_date):
-    ...
+    logger.info(f"running 'process_omni', start date: {start_date}, end date: {end_date}")
+    trough_prepare.process_omni_dataset(start_date, end_date)
 
 
 def process_all(start_date, end_date):

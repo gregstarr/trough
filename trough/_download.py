@@ -168,7 +168,7 @@ class AuroralBoundaryHttpDownloader(NasaSpdfHttpDownloader):
 
     def get_links(self, url, pattern):
         with request.urlopen(url) as r:
-            soup = bs4.BeautifulSoup(r.read())
+            soup = bs4.BeautifulSoup(r.read(), 'html.parser')
             links = soup.find_all('a')
         return [url + link.attrs['href'] for link in links if re.match(pattern, link.string)]
 
