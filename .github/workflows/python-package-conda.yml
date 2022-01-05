@@ -40,3 +40,7 @@ jobs:
             pip install pytest-html
             cd test
             python -m pytest --html=results.html
+      - uses: actions/upload-artifact@v2
+        with:
+          name: test-results
+          path: results.html
