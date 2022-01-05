@@ -1,4 +1,4 @@
-name: Use Setup-Miniconda From Marketplace
+name: build and test
 on: [push]
 
 jobs:
@@ -19,6 +19,7 @@ jobs:
           auto-activate-base: false
           auto-update-conda: true
       - run: |
+          conda activate trough
           conda info
           conda list
 #      - name: Lint
