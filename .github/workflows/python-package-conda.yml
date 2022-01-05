@@ -3,7 +3,7 @@ on: [push]
 
 jobs:
   miniconda:
-    name: Miniconda ${{ matrix.os }}, ${{ matrix.python-version }
+    name: Miniconda ${{ matrix.os }}, ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
         matrix:
