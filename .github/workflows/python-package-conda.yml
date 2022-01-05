@@ -31,7 +31,6 @@ jobs:
       - name: install trough
         run: python -m pip install -e .
       - name: Run pytest
-        shell: bash -l {0}
         run: |
             conda install pytest
             cd test
