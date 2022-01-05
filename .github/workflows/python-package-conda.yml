@@ -18,8 +18,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           auto-activate-base: false
           auto-update-conda: true
-      - shell: bash -l {0}
-        run: |
+      - run: |
           conda info
           conda list
 #      - name: Lint
@@ -34,4 +33,4 @@ jobs:
         run: |
             conda install pytest
             cd test
-            pytest
+            python -m pytest
