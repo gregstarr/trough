@@ -42,10 +42,10 @@ jobs:
             pytest test --html=${{ matrix.os }}-${{ matrix.python-version }}-results.html --self-contained-html
       - name: move log file
         shell: bash -l {0}
-        run: mv log.txt ${{ matrix.os }}-${{ matrix.python-version }}-log.txt
+        run: mv test.log ${{ matrix.os }}-${{ matrix.python-version }}-test.log
       - uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.os }}-${{ matrix.python-version }}-artifacts
           path: |
             ${{ matrix.os }}-${{ matrix.python-version }}-results.html
-            ${{ matrix.os }}-${{ matrix.python-version }}-log.txt
+            ${{ matrix.os }}-${{ matrix.python-version }}-test.log
