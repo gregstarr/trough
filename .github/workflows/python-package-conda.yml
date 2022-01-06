@@ -39,7 +39,10 @@ jobs:
             conda install pytest
             pip install pytest-html
             pytest test --html=${{ matrix.os }}-${{ matrix.python-version }}-results.html --self-contained-html
+            mv test/log.txt ${{ matrix.os }}-${{ matrix.python-version }}-log.txt
       - uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.os }}-${{ matrix.python-version }}-test-results
-          path: ${{ matrix.os }}-${{ matrix.python-version }}-results.html
+          name: ${{ matrix.os }}-${{ matrix.python-version }}-artifacts
+          path: |
+            ${{ matrix.os }}-${{ matrix.python-version }}-results.html
+            ${{ matrix.os }}-${{ matrix.python-version }}-log.txt
