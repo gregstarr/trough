@@ -23,6 +23,7 @@ jobs:
           conda activate trough
           conda info
           conda list
+        name: activate conda env
 
 #      - name: Lint
 #        shell: bash -l {0}
@@ -39,7 +40,9 @@ jobs:
             conda install pytest
             pip install pytest-html
             pytest test --html=${{ matrix.os }}-${{ matrix.python-version }}-results.html --self-contained-html
-            mv test/log.txt ${{ matrix.os }}-${{ matrix.python-version }}-log.txt
+      - name: move log file
+        shell: bash -l {0}
+        run: mv log.txt ${{ matrix.os }}-${{ matrix.python-version }}-log.txt
       - uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.os }}-${{ matrix.python-version }}-artifacts
