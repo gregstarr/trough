@@ -18,7 +18,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           auto-activate-base: false
           auto-update-conda: true
-      - shell: bash
+      - shell: bash -l {0}
         run: |
           conda activate trough
           conda info
@@ -30,15 +30,15 @@ jobs:
 #            conda install flake8
 #            python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 #            python -m flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-      - shell: bash
+      - shell: bash -l {0}
         name: install trough
         run: python -m pip install -e .
-      - shell: bash
+      - shell: bash -l {0}
         name: Run pytest
         run: |
             conda install pytest
             pip install pytest-html
-            python -m pytest test --html="./results.html" --self-contained-html
+            pytest test --html="./results.html" --self-contained-html
       - uses: actions/upload-artifact@v2
         with:
           name: test-results
