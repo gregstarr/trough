@@ -12,6 +12,7 @@ import appdirs
 import json
 import contextlib
 import typing
+import numpy as np
 
 
 class InvalidConfiguration(Exception):
@@ -77,6 +78,21 @@ class Config:
         self.nasa_spdf_download_method = 'ftp'
 
         self.config_path = Path(__file__).parent / 'trough.json'
+
+        self.lat_res = 1
+        self.lon_res = 2
+
+    def get_mlat_bins(self):
+        return np.arange(29.5, 90, self.lat_res)
+
+    def get_mlat_vals(self):
+        return np.arange(29.5 + self.lat_res / 2, 90, self.lat_res)
+
+    def get_mlt_bins(self):
+        return np.arange(-12, 12 + 24 / 360, self.lon_res * 24 / 360)
+
+    def get_mlt_vals(self):
+        return np.arange(-12 + .5 * self.lon_res * 24 / 360, 12 + 24 / 360, self.lon_res * 24 / 360)
 
     def load_json(self, config_path):
         with open(config_path) as f:

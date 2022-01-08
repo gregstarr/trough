@@ -1,9 +1,9 @@
 import logging
-from pathlib import Path
 
 from trough import config, InvalidConfiguration
 import trough._download as trough_download
 import trough._aux_data as trough_prepare
+import trough._tec as trough_tec
 
 
 logger = logging.getLogger(__name__)
@@ -52,11 +52,13 @@ def download_all(start_date, end_date):
 
 
 def process_tec(start_date, end_date):
-    ...
+    logger.info(f"running 'process_tec', start date: {start_date}, end date: {end_date}")
+    trough_tec.process_tec_dataset(start_date, end_date)
 
 
 def process_arb(start_date, end_date):
-    ...
+    logger.info(f"running 'process_arb', start date: {start_date}, end date: {end_date}")
+    trough_prepare.process_auroral_boundary_dataset(start_date, end_date)
 
 
 def process_omni(start_date, end_date):

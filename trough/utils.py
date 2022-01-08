@@ -1,19 +1,6 @@
 import numpy as np
 import datetime
-
-
-def datetime64_to_timestamp(dt64):
-    """Convert single / array of numpy.datetime64 to timestamps (seconds since epoch)
-
-    Parameters
-    ----------
-    dt64: numpy.ndarray[datetime64]
-
-    Returns
-    -------
-    timestamp: numpy.ndarray[float]
-    """
-    return (dt64 - np.datetime64('1970-01-01T00:00:00')) / np.timedelta64(1, 's')
+import h5py
 
 
 def datetime64_to_datetime(dt64):
@@ -27,45 +14,10 @@ def datetime64_to_datetime(dt64):
     -------
     list[datetime]
     """
-    ts = datetime64_to_timestamp(dt64)
+    ts = dt64.astype('datetime64[s]').astype(float)
     if isinstance(ts, np.ndarray):
         return [datetime.datetime.utcfromtimestamp(t) for t in ts]
     return datetime.datetime.utcfromtimestamp(ts)
-
-
-def decompose_datetime64(dt64):
-    """Convert array of np.datetime64 to an array (N x 3) of year, month (jan=1), day (1 index)
-
-    Parameters
-    ----------
-    dt64: numpy.ndarray[datetime64]
-
-    Returns
-    -------
-    idx: numpy.ndarray (N x 3)
-    """
-    year_floor = dt64.astype('datetime64[Y]')
-    month_floor = dt64.astype('datetime64[M]')
-
-    year = year_floor.astype(int) + 1970
-    month = (dt64.astype('datetime64[M]') - year_floor).astype(int) + 1
-    day = (dt64.astype('datetime64[D]') - month_floor).astype(int) + 1
-
-    return np.column_stack((year, month, day))
-
-
-def no_ext_fn(fn):
-    """return name of file with no path or extension
-
-    Parameters
-    ----------
-    fn: str
-
-    Returns
-    -------
-    str
-    """
-    return os.path.splitext(os.path.basename(fn))[0]
 
 
 def centered_bn_func(func, arr, window_diameter, pad=False, **kwargs):
@@ -144,12 +96,6 @@ def extract_patches(arr, patch_shape, step=1):
 
 def write_h5(fn, **kwargs):
     """Writes an h5 file with data specified by kwargs.
-
-    Parameters
-    ----------
-    fn: str
-        file path to write
-    **kwargs
     """
     with h5py.File(fn, 'w') as f:
         for key, value in kwargs.items():

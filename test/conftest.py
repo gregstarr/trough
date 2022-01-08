@@ -41,7 +41,19 @@ def test_dates():
     yield start_date, end_date
 
 
-@pytest.fixture(scope='session', autouse=True)
-def download_test_data(setup_cfg, test_dates):
-    trough.scripts.download_all(*test_dates)
+@pytest.fixture(scope='session')
+def download_omni_data(setup_cfg, test_dates):
+    trough.scripts.download_omni(*test_dates)
+    yield
+
+
+@pytest.fixture(scope='session')
+def download_arb_data(setup_cfg, test_dates):
+    trough.scripts.download_arb(*test_dates)
+    yield
+
+
+@pytest.fixture(scope='session')
+def download_tec_data(setup_cfg, test_dates):
+    trough.scripts.download_tec(*test_dates)
     yield

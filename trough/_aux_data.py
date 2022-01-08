@@ -1,8 +1,17 @@
+import h5py
 import numpy as np
 import pandas
 from pathlib import Path
+from datetime import datetime
+from apexpy import Apex
+from scipy.interpolate import interp1d
+import logging
 
+import trough.utils as trough_utils
 from trough import config
+
+
+logger = logging.getLogger(__name__)
 
 _omni_names = ['year', 'decimal_day', 'hour', 'bartels_rotation_number', 'id_imf', 'id_sw_plasma', 'imf_n_pts',
                'plasma_n_pts', 'avg_b_mag', 'mag_avg_b', 'lat_avg_b', 'lon_avg_b', 'bx_gse', 'by_gse', 'bz_gse',
@@ -15,6 +24,7 @@ _omni_names = ['year', 'decimal_day', 'hour', 'bartels_rotation_number', 'id_imf
 _omni_formats = ['i', 'i', 'i', 'i', 'i', 'i', 'i', 'i', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f',
                  'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'f', 'i', 'i',
                  'i', 'i', 'f', 'f', 'f', 'f', 'f', 'f', 'i', 'i', 'f', 'f', 'i', 'i', 'f']
+_arb_fields = ['YEAR', 'DOY', 'TIME', 'ALTITUDE', 'MODEL_NORTH_GEOGRAPHIC_LATITUDE', 'MODEL_NORTH_GEOGRAPHIC_LONGITUDE']
 
 
 def open_downloaded_omni_file(fn):
@@ -89,8 +99,60 @@ def open_arb_file(fn):
     return arb_mlat, times
 
 
-def process_auroral_boundary_dataset():
-    ...
+def _process_auroral_boundary_dataset_year(year):
+    logger.info(f"processing arb data for {year}")
+    output_path = Path(config.processed_arb_dir) / f"arb_{year}.h5"
+
+    start_date = datetime(year - 1, 12, 31)
+    end_date = datetime(year + 1, 1, 2)
+    apex = Apex(date=start_date)
+
+    data = {field: [] for field in _arb_fields}
+    data['sat'] = []
+    for path in Path(config.download_arb_dir).glob('*.nc'):
+        sat_name = path.name[:7]
+        date1 = datetime.strptime(path.name[25:39], "%Y%jT%H%M%S")
+        date2 = datetime.strptime(path.name[40:54], "%Y%jT%H%M%S")
+        if start_date > date2 or end_date < date1:
+            continue
+        data['sat'].append(sat_name)
+        with h5py.File(path) as f:
+            for field in _arb_fields:
+                data[field].append(f[field][()])
+        logger.info(f"arb file: {path}, info: [{sat_name}, {date1}, {date2}], n_pts: {len(data['ALTITUDE'][-1])}")
+    years = np.array(data['YEAR']) - 1970
+    doys = np.array(data['DOY']) - 1
+    seconds = np.array(data['TIME'])
+    times = years.astype('datetime64[Y]') + doys.astype('timedelta64[D]') + seconds.astype('timedelta64[s]')
+    assert times.shape == np.unique(times).shape, "Non unique times, time to fix"
+    logger.info(f"{times.shape[0]} time points")
+    sort_idx = np.argsort(times)
+    times = times[sort_idx]
+    mlt_vals = config.get_mlt_vals()
+    mlat = np.empty((times.shape[0], mlt_vals.shape[0]))
+    for i, idx in enumerate(sort_idx):
+        lat = data['MODEL_NORTH_GEOGRAPHIC_LATITUDE'][idx]
+        lon = data['MODEL_NORTH_GEOGRAPHIC_LONGITUDE'][idx]
+        height = np.mean(data['ALTITUDE'][idx])
+        apx_lat, mlt = apex.convert(lat, lon, 'geo', 'mlt', height, trough_utils.datetime64_to_datetime(times[idx]))
+        mlat[i] = np.interp(mlt_vals, mlt, apx_lat, period=24)
+    ref_times = np.arange(
+        np.datetime64(f"{year}-01-01T00:00:00"),
+        np.datetime64(f"{year + 1}-01-01T00:00:00"),
+        np.timedelta64(1, 'h')
+    )
+    logger.info(f"ref times for year: [{ref_times[0]}, {ref_times[-1]}]")
+    ref_times = ref_times[(ref_times >= times[0]) & (ref_times <= times[-1])]
+    logger.info(f"reduced ref times: [{ref_times[0]}, {ref_times[-1]}]")
+    ref_times = ref_times.astype(float)
+    interpolator = interp1d(times.astype('datetime64[s]').astype(float), mlat, axis=0)
+    mlat = interpolator(ref_times)
+    trough_utils.write_h5(output_path, times=ref_times, mlat=mlat)
+
+
+def process_auroral_boundary_dataset(start_date, end_date):
+    for year in range(start_date.year, end_date.year + 1):
+        _process_auroral_boundary_dataset_year(year)
 
 
 def process_omni_dataset(start_date, end_date):

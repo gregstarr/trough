@@ -315,3 +315,7 @@ def open_tec_file(fn):
         ssmlon = f['ssmlon'][()]
     print(f"Opened TEC file: {fn}, size: {tec.shape}")
     return tec, times, ssmlon, n, std
+
+
+def process_tec_dataset(start_date, end_date):
+    ...

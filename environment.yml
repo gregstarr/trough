@@ -1,16 +1,12 @@
-name: trough
 channels:
   - conda-forge
 dependencies:
-   - numpy
    - scipy
    - h5py
    - scikit-image
-   - scikit-learn
    - appdirs
    - bs4
    - pytables
    - pip
    - pip:
-      - apexpy
       - madrigalWeb
