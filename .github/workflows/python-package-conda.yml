@@ -9,7 +9,7 @@ jobs:
         fail-fast: false
         matrix:
             os: ["ubuntu-latest", "windows-latest"]
-            python-version: ['3.7', '3.8', '3.9', '3.10']
+            python-version: ['3.7', '3.8', '3.9']
     steps:
       - uses: actions/checkout@v2
       - uses: conda-incubator/setup-miniconda@v2
@@ -20,9 +20,9 @@ jobs:
       - shell: bash -l {0}
         run: |
           conda activate test
-          conda install numpy
+          conda install numpy=1.21.2
           pip install apexpy
-          conda install pytest
+          conda install pytest=6.2.5
           pip install pytest-html
           conda env update -f environment.yml
           conda info
