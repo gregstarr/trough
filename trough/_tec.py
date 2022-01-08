@@ -1,11 +1,12 @@
 import numpy as np
-import apexpy
+from apexpy import Apex
 from scipy.stats import binned_statistic_2d
-import time
 from multiprocessing import Pool
 
+import trough.utils as trough_utils
 
-def get_madrigal_data(start_date, end_date, data_dir=None):
+
+def get_madrigal_data(start_date, end_date):
     """Gets madrigal TEC and timestamps assuming regular sampling. Fills in missing time steps.
 
     Parameters
@@ -17,8 +18,6 @@ def get_madrigal_data(start_date, end_date, data_dir=None):
     -------
     tec, times: numpy.ndarray
     """
-    if data_dir is None:
-        data_dir = config.madrigal_dir
     dt = np.timedelta64(5, 'm')
     dt_sec = dt.astype('timedelta64[s]').astype(int)
     start_date = (np.ceil(start_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
@@ -195,29 +194,19 @@ def calculate_bins(mlat, mlt, tec, times, ssmlon, bins):
     return times[0], final_tec, ssmlon[0], final_tec_n, final_tec_s
 
 
-def process_file(start_date, end_date, mlat_grid, mlon_grid, converter, bins, map_period=np.timedelta64(1, 'h'),
-                 madrigal_dir=None):
-    """Processes madrigal data into a single file. Opens madrigal h5 files, converts input mlon grid to MLT by
-    computing subsolar points at each time step, sets up and runs TEC binning, unpacks and returns results.
+def get_mag_grid(converter):
+    lon_grid, lat_grid = np.meshgrid(np.arange(-180, 180), np.arange(-90, 90))
+    mlat, mlon = converter.convert(lat_grid.ravel(), lon_grid.ravel(), 'geo', 'apex', height=350)
+    mlat = mlat.reshape(lat_grid.shape)
+    mlon = mlon.reshape(lat_grid.shape)
+    return mlat, mlon
 
-    Parameters
-    ----------
-    start_date, end_date: np.datetime64
-    mlat_grid, mlon_grid: numpy.ndarray[float] (X, Y)
-    converter: apexpy.Apex
-    bins: list[numpy.ndarray[float] (X + 1, ), numpy.ndarray[float] (Y + 1, )]
-    map_period: {np.timedelta64, int}
-    madrigal_dir: str
-        to specify alternate directory during testing
 
-    Returns
-    -------
-    times, tec, n, std, ssmlon: numpy.ndarray[float]
-            (T, ), (T, X, Y), (T, X, Y), (T, X, Y), (T, )
+def process_month(month):
+    """Processes an interval of madrigal data and writes to files.
     """
-    if not isinstance(madrigal_dir, str):
-        madrigal_dir = config.madrigal_dir
-    print(start_date, end_date)
+    apex = Apex(trough_utils.datetime64_to_datetime(month))
+    mlat, mlon = get_mag_grid(apex)
     tec, ts = io.get_madrigal_data(start_date, end_date, data_dir=madrigal_dir)
     print("Converting coordinates")
     mlt, ssmlon = convert.mlon_to_mlt_array(mlon_grid[None, :, :], ts[:, None, None], converter, return_ssmlon=True)
@@ -226,7 +215,7 @@ def process_file(start_date, end_date, mlat_grid, mlon_grid, converter, bins, ma
     print("Setting up for binning")
     args = assemble_binning_args(mlat, mlt, tec, ts, ssmlon, bins, map_period)
     print(f"Calculating bins for {len(args)} time steps")
-    with Pool(processes=8) as p:
+    with Pool() as p:
         pool_result = p.starmap(calculate_bins, args)
     print("Calculated bins")
     times = np.array([r[0] for r in pool_result])
@@ -234,52 +223,12 @@ def process_file(start_date, end_date, mlat_grid, mlon_grid, converter, bins, ma
     ssmlon = np.array([r[2] for r in pool_result])
     n = np.array([r[3] for r in pool_result])
     std = np.array([r[4] for r in pool_result])
-    return times, tec, ssmlon, n, std
-
-
-def get_mag_grid(ref_lat, ref_lon, converter):
-    lon_grid, lat_grid = np.meshgrid(ref_lon, ref_lat)
-    mlat, mlon = converter.convert(lat_grid.ravel(), lon_grid.ravel(), 'geo', 'apex', height=350)
-    mlat = mlat.reshape(lat_grid.shape)
-    mlon = mlon.reshape(lat_grid.shape)
-    return mlat, mlon
-
-
-def process_multiple_files(start_date, end_date, bins, dt=np.timedelta64(1, 'M'), map_period=np.timedelta64(1, 'h'),
-                           ref_lat=None, ref_lon=None, output_dir=None, file_name_pattern=_output_file_name):
-    """Processes an interval of madrigal data and writes to files.
-
-    Parameters
-    ----------
-    start_date, end_date: numpy.datetime64
-    bins: list[numpy.ndarray[float] (X + 1, ), numpy.ndarray[float] (Y + 1, )]
-    dt, map_period: numpy.timedelta64
-    ref_lat, ref_lon: numpy.ndarray[float]
-        latitude / longitude values of madrigal lat-lon grid
-    output_dir: str
-        directory to write files to
-    file_name_pattern: callable
-    """
-    apex_date = utils.datetime64_to_datetime(start_date)
-    converter = apexpy.Apex(date=apex_date)
-    mlat, mlon = get_mag_grid(ref_lat, ref_lon, converter)
-    months = np.arange(start_date, end_date, dt)
-    for month in months:
-        times, tec, ssmlon, n, std = process_file(month, min(end_date, month + dt), mlat, mlon, converter, bins,
-                                                  map_period)
-        if np.isfinite(tec).any():
-            fn = os.path.join(output_dir, file_name_pattern(month))
-            io.write_h5(fn, times=times.astype('datetime64[s]').astype(int), tec=tec, n=n, std=std, ssmlon=ssmlon)
-        else:
-            print(f"No data for month: {month}, not writing file")
+    trough_utils.write_h5(fn, times=times.astype('datetime64[s]').astype(int), tec=tec, n=n, std=std, ssmlon=ssmlon)
 
 
 def process_tec_dataset(start_date, end_date):
-
-    for year in years:
-        process_multiple_files(year, min(end_year, year + apex_dt), bins, dt=file_dt, map_period=map_period,
-                               output_dir=output_dir, file_name_pattern=file_name_pattern)
-    tf = time.time()
-    print((tf - t0) / 60)
-    # make grid file
-    io.write_h5(os.path.join(output_dir, "grid.h5"), mlt=mlt_vals, mlat=mlat_vals)
+    start_date = np.datetime64(start_date).astype('datetime64[M]')
+    end_date = np.datetime64(end_date).astype('datetime64[M]')
+    months = np.arange(start_date, end_date, np.timedelta64(1, 'M'))
+    for month in months:
+        process_month(month)
