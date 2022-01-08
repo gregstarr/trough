@@ -6,6 +6,7 @@ dependencies:
    - scikit-image
    - appdirs
    - bs4
+   - pandas
    - pytables
    - pip
    - pip:

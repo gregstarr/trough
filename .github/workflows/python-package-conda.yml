@@ -22,6 +22,8 @@ jobs:
           conda activate test
           conda install numpy
           pip install apexpy
+          conda install pytest
+          pip install pytest-html
           conda env update -f environment.yml
           conda info
           conda list
@@ -38,8 +40,6 @@ jobs:
       - shell: bash -l {0}
         name: Run pytest
         run: |
-            conda install pytest
-            pip install pytest-html
             pytest test --html=${{ matrix.os }}-${{ matrix.python-version }}-results.html --self-contained-html
       - name: move log file
         shell: bash -l {0}
