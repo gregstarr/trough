@@ -22,7 +22,7 @@ jobs:
           conda activate test
           conda install numpy=1.21.2
           pip install apexpy
-          conda install pytest=6.2.5
+          conda install pytest=6.2.5 -c conda-forge
           pip install pytest-html
           conda env update -f environment.yml
           conda info
