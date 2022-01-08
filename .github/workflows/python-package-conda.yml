@@ -20,7 +20,7 @@ jobs:
       - shell: bash -l {0}
         run: |
           conda activate test
-          conda install numpy=1.21.2
+          conda install numpy=1.21.2 libpython
           pip install apexpy
           conda install pytest=6.2.5 -c conda-forge
           pip install pytest-html
