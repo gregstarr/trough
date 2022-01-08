@@ -4,8 +4,14 @@ import pandas
 from skimage import measure, morphology
 import cvxpy as cp
 import multiprocessing
-
 from scipy.sparse import csr_matrix
+from pathlib import Path
+
+from trough import config
+import trough._tec as trough_tec
+import trough._aux_data as trough_data
+import trough._model as trough_model
+import trough.utils as trough_utils
 
 
 def estimate_background(tec, patch_shape):
@@ -152,7 +158,7 @@ def run_single(u, basis, x, tv, l2, t, output_shape):
     total_cost = main_cost + tv_cost + l2_cost
     prob = cp.Problem(cp.Minimize(total_cost))
     try:
-        prob.solve(solver=config.SOLVER)
+        prob.solve(solver=cp.GUROBI)
     except Exception as e:
         print("FAILED, USING ECOS:", e)
         prob.solve(solver=cp.ECOS)
@@ -170,50 +176,45 @@ def run_multiple(args, parallel=True):
     return np.stack(results, axis=0)
 
 
-class RbfInversionLabelJob(TroughLabelJob):
+def label_trough_one_year(year):
+    one_h = np.timedelta64(1, 'h')
+    params = config.trough_id_params
 
-    def __init__(self, bg_est_shape=BG_EST_SHAPE, model_weight_max=MODEL_WEIGHT_MAX, rbf_bw=RBF_BW, tv_hw=TV_HW,
-                 tv_vw=TV_VW, l2_weight=L2_WEIGHT, tv_weight=TV_WEIGHT, prior_order=PRIOR_ORDER, prior=PRIOR,
-                 prior_offset=PRIOR_OFFSET, perimeter_th=PERIMETER_TH, area_th=AREA_TH, closing_rad=0,
-                 threshold=THRESHOLD):
-        super().__init__(date, bg_est_shape=bg_est_shape)
-        self.model_weight_max = model_weight_max
-        self.rbf_bw = rbf_bw
-        self.tv_vw = tv_vw
-        self.tv_hw = tv_hw
-        self.l2_weight = l2_weight
-        self.tv_weight = tv_weight
-        self.prior_order = prior_order
-        self.prior = prior
-        self.prior_offset = prior_offset
-        self.perimeter_th = perimeter_th
-        self.area_th = area_th
-        self.threshold = threshold
-        self.closing_rad = closing_rad
+    days = np.arange(year, year + np.timedelta64(1, 'Y'), np.timedelta64(1, 'D'))
+    trough_labels = []
+    trough_times = []
+    for day in days:
+        start_time = day.astype('datetime64[D]').astype('datetime64[s]')
+        end_time = start_time + np.timedelta64(1, 'D')
+        tec_start = start_time - np.floor(params.bg_est_shape[0] / 2) * one_h
+        tec_end = end_time + (np.floor(params.bg_est_shape[0] / 2)) * one_h
 
-    def run(self):
+        tec, tec_times = trough_tec.get_tec_data(tec_start, tec_end)
+        x, times = preprocess_interval(tec, tec_times, bg_est_shape=params.bg_est_shape)
+        arb, _ = trough_data.get_arb_data(start_time, end_time)
         print("Setting up inversion optimization")
-        if self.prior == 'empirical_model':
-            # get deminov model
-            ut = self.times.astype('datetime64[s]').astype(float)
-            model_mlat = deminov.get_model(ut, config.mlt_vals)
-        elif self.prior == 'auroral_boundary':
-            model_mlat = self.arb + self.prior_offset
-        else:
-            raise Exception("Invalid prior name")
+        ut = times.astype('datetime64[s]').astype(float)
+        model_mlat = trough_model.get_model(ut, config.get_mlt_vals())
 
-        args = get_optimization_args(self.x, self.times, model_mlat, self.model_weight_max, self.rbf_bw, self.tv_hw,
-                                     self.tv_vw, self.l2_weight, self.tv_weight, self.prior_order)
+        args = get_optimization_args(x, times, model_mlat, params.model_weight_max, params.rbf_bw, params.tv_hw,
+                                     params.tv_vw, params.l2_weight, params.tv_weight, params.prior_order)
         # run optimization
         print("Running inversion optimization")
-        self.model_output = run_multiple(args, parallel=config.PARALLEL)
-        if self.threshold is not None:
-            # threshold
-            initial_trough = self.model_output >= self.threshold
-            # postprocess
-            print("Postprocessing inversion results")
-            self.trough = ttec.postprocess(initial_trough, self.perimeter_th, self.area_th, self.arb, self.closing_rad)
+        model_output = run_multiple(args)
+        # threshold
+        initial_trough = model_output >= params.threshold
+        # postprocess
+        print("Postprocessing inversion results")
+        trough_labels.append(postprocess(initial_trough, params.perimeter_th, params.area_th, arb, params.closing_rad))
+        trough_times.append(tec_times)
+    trough_labels = np.concatenate(trough_labels, axis=0)
+    trough_times = np.concatenate(trough_times, axis=0)
+
+    output_fn = Path(config.processed_labels_dir) / f"labels_{year}.h5"
+    trough_utils.write_h5(output_fn, labels=trough_labels, times=trough_times.astype(float))
 
 
-def run_trough_id(tec_dir, arb_dir, omni_dir, start_date, end_date, **trough_id_params):
-    ...
+def label_trough(start_date, end_date):
+    for year in range(start_date.year, end_date.year + 1):
+        label_trough_one_year(year)
+

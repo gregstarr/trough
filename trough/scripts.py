@@ -4,6 +4,7 @@ from trough import config, InvalidConfiguration
 import trough._download as trough_download
 import trough._aux_data as trough_prepare
 import trough._tec as trough_tec
+import trough._trough as trough_label
 
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ def process_all(start_date, end_date):
 
 
 def label_trough(start_date, end_date):
-    ...
+    trough_label.label_trough(start_date, end_date)
 
 
 def full_run(start_date, end_date):

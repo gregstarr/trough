@@ -1,6 +1,5 @@
 import pytest
 import logging
-from pathlib import Path
 from tempfile import TemporaryDirectory
 from datetime import datetime
 
@@ -32,6 +31,7 @@ def setup_cfg(skip_ftp):
             config.nasa_spdf_download_method = 'http'
         logger.info(f"base directory: {tempdir}")
         yield
+    logger.info(f'resetting config: {config.download_omni_dir}')
 
 
 @pytest.fixture(scope='session')
@@ -43,17 +43,31 @@ def test_dates():
 
 @pytest.fixture(scope='session')
 def download_omni_data(setup_cfg, test_dates):
+    logger.info('download omni fixture start')
     trough.scripts.download_omni(*test_dates)
     yield
+    logger.info('download omni fixture end')
 
 
 @pytest.fixture(scope='session')
 def download_arb_data(setup_cfg, test_dates):
+    logger.info('download arb fixture start')
     trough.scripts.download_arb(*test_dates)
     yield
+    logger.info('download arb fixture end')
 
 
 @pytest.fixture(scope='session')
 def download_tec_data(setup_cfg, test_dates):
+    logger.info('download tec fixture start')
     trough.scripts.download_tec(*test_dates)
     yield
+    logger.info('download tec fixture end')
+
+
+@pytest.fixture(scope='session')
+def process_all_data(setup_cfg, test_dates, download_omni_data, download_arb_data, download_tec_data):
+    logger.info('process all fixture start')
+    trough.scripts.process_all(*test_dates)
+    yield
+    logger.info('process all fixture end')

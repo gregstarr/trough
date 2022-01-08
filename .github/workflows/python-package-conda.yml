@@ -36,7 +36,9 @@ jobs:
         pip install -e .
         pytest test --html=${{ matrix.python-version }}-results.html --self-contained-html
     - run: mv test.log ${{ matrix.python-version }}-test.log
+      if: always()
     - uses: actions/upload-artifact@v2
+      if: always()
       with:
         name: ${{ matrix.python-version }}-artifacts
         path: |
