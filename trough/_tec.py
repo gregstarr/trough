@@ -1,48 +1,48 @@
 import numpy as np
-from apexpy import Apex
+import apexpy
 from scipy.stats import binned_statistic_2d
 from multiprocessing import Pool
+from pathlib import Path
+import h5py
+import logging
+import functools
 
 import trough.utils as trough_utils
+from trough import config
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_madrigal_data(start_date, end_date):
     """Gets madrigal TEC and timestamps assuming regular sampling. Fills in missing time steps.
-
-    Parameters
-    ----------
-    start_date, end_date: np.datetime64
-    data_dir: str
-
-    Returns
-    -------
-    tec, times: numpy.ndarray
     """
+    mad_lon, mad_lat = np.arange(-180, 180), np.arange(-90, 90)
     dt = np.timedelta64(5, 'm')
     dt_sec = dt.astype('timedelta64[s]').astype(int)
     start_date = (np.ceil(start_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
     end_date = (np.ceil(end_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
     ref_times = np.arange(start_date, end_date, dt)
     ref_times_ut = ref_times.astype('datetime64[s]').astype(int)
-    tec = np.ones((config.madrigal_lat.shape[0], config.madrigal_lon.shape[0], ref_times_ut.shape[0])) * np.nan
+    tec = np.ones((mad_lat.shape[0], mad_lon.shape[0], ref_times_ut.shape[0])) * np.nan
     file_dates = np.unique(ref_times.astype('datetime64[D]'))
-    file_dates = utils.decompose_datetime64(file_dates)
+    file_dates = trough_utils.decompose_datetime64(file_dates)
     for i in range(file_dates.shape[0]):
         y = file_dates[i, 0]
         m = file_dates[i, 1]
         d = file_dates[i, 2]
         try:
-            fn = glob.glob(os.path.join(data_dir, f"gps{y - 2000:02d}{m:02d}{d:02d}g.*.hdf5"))[-1]
+            fn = list(Path(config.download_tec_dir).glob(f"gps{y - 2000:02d}{m:02d}{d:02d}g.*.hdf5"))[-1]
         except IndexError:
-            print(f"{y}-{m}-{d} madrigal file doesn't exist")
+            logger.warning(f"{y}-{m}-{d} madrigal file doesn't exist")
             continue
         t, ut, lat, lon = open_madrigal_file(fn)
         month_time_mask = np.in1d(ref_times_ut, ut)
         day_time_mask = np.in1d(ut, ref_times_ut)
-        if not (np.all(lat == config.madrigal_lat) and np.all(lon == config.madrigal_lon)):
-            print(f"THIS FILE HAS MISSING DATA!!!!!!! {fn}")
-            lat_ind = np.argwhere(np.in1d(config.madrigal_lat, lat))[:, 0]
-            lon_ind = np.argwhere(np.in1d(config.madrigal_lon, lon))[:, 0]
+        if not (np.all(lat == mad_lat) and np.all(lon == mad_lon)):
+            logger.warning(f"THIS FILE HAS MISSING DATA!!!!!!! {fn}")
+            lat_ind = np.argwhere(np.in1d(mad_lat, lat))[:, 0]
+            lon_ind = np.argwhere(np.in1d(mad_lon, lon))[:, 0]
             time_ind = np.argwhere(month_time_mask)[:, 0]
             lat_grid_ind, lon_grid_ind, time_grid_ind = np.meshgrid(lat_ind, lon_ind, time_ind)
             tec[lat_grid_ind.ravel(), lon_grid_ind.ravel(), time_grid_ind.ravel()] = t[:, :, day_time_mask].ravel()
@@ -54,20 +54,9 @@ def get_madrigal_data(start_date, end_date):
 
 def open_madrigal_file(fn):
     """Open a madrigal file, return its data
-
-    Parameters
-    ----------
-    fn: str
-        madrigal file name to open
-
-    Returns
-    -------
-    tec, timestamps, latitude, longitude: numpy.ndarray[float]
-        (X, Y, T), (T, ), (X, ), (Y, )
     """
     with h5py.File(fn, 'r') as f:
         tec = f['Data']['Array Layout']['2D Parameters']['tec'][()]
-        dtec = f['Data']['Array Layout']['2D Parameters']['tec'][()]
         timestamps = f['Data']['Array Layout']['timestamps'][()]
         lat = f['Data']['Array Layout']['gdlat'][()]
         lon = f['Data']['Array Layout']['glon'][()]
@@ -75,64 +64,7 @@ def open_madrigal_file(fn):
     return tec, timestamps, lat, lon
 
 
-def get_tec_data(start_date, end_date, dt=np.timedelta64(1, 'h'), data_dir=None):
-    """Gets TEC and timestamps
-
-    Parameters
-    ----------
-    start_date, end_date: np.datetime64
-    data_dir: str
-
-    Returns
-    -------
-    tec, times: numpy.ndarray
-    """
-    if data_dir is None:
-        data_dir = config.tec_dir
-    dt_sec = dt.astype('timedelta64[s]').astype(int)
-    start_date = (np.ceil(start_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
-    end_date = (np.ceil(end_date.astype('datetime64[s]').astype(int) / dt_sec) * dt_sec).astype('datetime64[s]')
-    ref_times = np.arange(start_date, end_date, dt)
-    ref_times_ut = ref_times.astype('datetime64[s]').astype(int)
-    tec = []
-    ssmlon = []
-    n_samples = []
-    file_dates = np.unique(ref_times.astype('datetime64[M]'))
-    file_dates = utils.decompose_datetime64(file_dates)
-    for i in range(file_dates.shape[0]):
-        y = file_dates[i, 0]
-        m = file_dates[i, 1]
-        fn = os.path.join(data_dir, "{year:04d}_{month:02d}_tec.h5".format(year=y, month=m))
-        t, ut, ss, n, std = open_tec_file(fn)
-        in_time_mask = np.in1d(ut, ref_times_ut)
-        tec.append(t[in_time_mask])
-        ssmlon.append(ss[in_time_mask])
-        n_samples.append(n[in_time_mask])
-    return np.concatenate(tec, axis=0), ref_times, np.concatenate(ssmlon), np.concatenate(n_samples)
-
-
-def open_tec_file(fn):
-    """Open a monthly TEC file, return its data
-
-    Parameters
-    ----------
-    fn: str
-
-    Returns
-    -------
-    tec, times, ssmlon, n, std: numpy.ndarray
-    """
-    with h5py.File(fn, 'r') as f:
-        tec = f['tec'][()]
-        n = f['n'][()]
-        times = f['times'][()]
-        std = f['std'][()]
-        ssmlon = f['ssmlon'][()]
-    print(f"Opened TEC file: {fn}, size: {tec.shape}")
-    return tec, times, ssmlon, n, std
-
-
-def assemble_binning_args(mlat, mlt, tec, times, ssmlon, bins, map_period):
+def assemble_binning_args(mlat, mlt, tec, times, map_period=np.timedelta64(1, 'h')):
     """Creates a list of tuple arguments to be passed to `calculate_bins`. `calculate_bins` is called by the process
     pool manager using each tuple in the list returned by this function as arguments. Each set of arguments corresponds
     to one processed TEC map and should span a time period specified by `map_period`. `map_period` should evenly divide
@@ -141,7 +73,6 @@ def assemble_binning_args(mlat, mlt, tec, times, ssmlon, bins, map_period):
     Parameters
     ----------
     mlat, mlt, tec, times, ssmlon: numpy.ndarray[float]
-    bins: list[numpy.ndarray[float]]
     map_period: {np.timedelta64, int}
 
     Returns
@@ -163,12 +94,12 @@ def assemble_binning_args(mlat, mlt, tec, times, ssmlon, bins, map_period):
         mlat_r = mlat[time_slice][fin_mask].copy()
         mlt_r = mlt[time_slice][fin_mask].copy()
         tec_r = tec[time_slice][fin_mask].copy()
-        args.append((mlat_r, mlt_r, tec_r, times[time_slice], ssmlon[time_slice], bins))
+        args.append((mlat_r, mlt_r, tec_r, times[time_slice]))
         current_time += map_period
     return args
 
 
-def calculate_bins(mlat, mlt, tec, times, ssmlon, bins):
+def calculate_bins(mlat, mlt, tec, times, bins):
     """Calculates TEC in MLAT - MLT bins. Executed in process pool.
 
     Parameters
@@ -180,18 +111,13 @@ def calculate_bins(mlat, mlt, tec, times, ssmlon, bins):
     -------
     tuple
         time: int or float
-        final_tec, final_tec_n, final_tec_s: numpy.ndarray[float] (T, X, Y)
+        final_tec, final_tec_n
     """
     if tec.size == 0:
-        placeholder = np.ones((bins[0].shape[0] - 1, bins[1].shape[0] - 1)) * np.nan
-        final_tec = placeholder.copy()
-        final_tec_n = placeholder.copy()
-        final_tec_s = placeholder.copy()
+        final_tec = np.ones((bins[0].shape[0] - 1, bins[1].shape[0] - 1)) * np.nan
     else:
         final_tec = binned_statistic_2d(mlat, mlt, tec, 'mean', bins).statistic
-        final_tec_n = binned_statistic_2d(mlat, mlt, tec, 'count', bins).statistic
-        final_tec_s = binned_statistic_2d(mlat, mlt, tec, 'std', bins).statistic
-    return times[0], final_tec, ssmlon[0], final_tec_n, final_tec_s
+    return times[0], final_tec
 
 
 def get_mag_grid(converter):
@@ -205,30 +131,31 @@ def get_mag_grid(converter):
 def process_month(month):
     """Processes an interval of madrigal data and writes to files.
     """
-    apex = Apex(trough_utils.datetime64_to_datetime(month))
+    apex = apexpy.Apex(trough_utils.datetime64_to_datetime(month))
     mlat, mlon = get_mag_grid(apex)
-    tec, ts = io.get_madrigal_data(start_date, end_date, data_dir=madrigal_dir)
-    print("Converting coordinates")
-    mlt, ssmlon = convert.mlon_to_mlt_array(mlon_grid[None, :, :], ts[:, None, None], converter, return_ssmlon=True)
-    mlat = mlat_grid[None, :, :] * np.ones((ts.shape[0], 1, 1))
+    tec, ts = get_madrigal_data(month, month + 1)
+    logger.info("Converting coordinates")
+    mlt = apex.mlon2mlt(mlon[None, :, :], ts[:, None, None])
+    mlat = mlat[None, :, :] * np.ones((ts.shape[0], 1, 1))
     mlt[mlt > 12] -= 24
-    print("Setting up for binning")
-    args = assemble_binning_args(mlat, mlt, tec, ts, ssmlon, bins, map_period)
-    print(f"Calculating bins for {len(args)} time steps")
+    logger.info("Setting up for binning")
+    args = assemble_binning_args(mlat, mlt, tec, ts)
+    logger.info(f"Calculating bins for {len(args)} time steps")
+    calc_bins = functools.partial(calculate_bins, bins=[config.get_mlat_bins(), config.get_mlt_bins()])
     with Pool() as p:
-        pool_result = p.starmap(calculate_bins, args)
-    print("Calculated bins")
+        pool_result = p.starmap(calc_bins, args)
+    logger.info("Calculated bins")
     times = np.array([r[0] for r in pool_result])
     tec = np.array([r[1] for r in pool_result])
-    ssmlon = np.array([r[2] for r in pool_result])
-    n = np.array([r[3] for r in pool_result])
-    std = np.array([r[4] for r in pool_result])
-    trough_utils.write_h5(fn, times=times.astype('datetime64[s]').astype(int), tec=tec, n=n, std=std, ssmlon=ssmlon)
+
+    dd = trough_utils.decompose_datetime64(month)
+    output_fn = Path(config.processed_tec_dir) / f"tec_{dd[0, 0]:04d}_{dd[0, 1]:02d}.h5"
+    trough_utils.write_h5(output_fn, times=times.astype('datetime64[s]').astype(int), tec=tec)
 
 
 def process_tec_dataset(start_date, end_date):
     start_date = np.datetime64(start_date).astype('datetime64[M]')
     end_date = np.datetime64(end_date).astype('datetime64[M]')
-    months = np.arange(start_date, end_date, np.timedelta64(1, 'M'))
+    months = np.arange(start_date, end_date + 1, np.timedelta64(1, 'M'))
     for month in months:
         process_month(month)

@@ -20,6 +20,27 @@ def datetime64_to_datetime(dt64):
     return datetime.datetime.utcfromtimestamp(ts)
 
 
+def decompose_datetime64(dt64):
+    """Convert array of np.datetime64 to an array (N x 3) of year, month (jan=1), day (1 index)
+
+    Parameters
+    ----------
+    dt64: numpy.ndarray[datetime64]
+
+    Returns
+    -------
+    idx: numpy.ndarray (N x 3)
+    """
+    year_floor = dt64.astype('datetime64[Y]')
+    month_floor = dt64.astype('datetime64[M]')
+
+    year = year_floor.astype(int) + 1970
+    month = (dt64.astype('datetime64[M]') - year_floor).astype(int) + 1
+    day = (dt64.astype('datetime64[D]') - month_floor).astype(int) + 1
+
+    return np.column_stack((year, month, day))
+
+
 def centered_bn_func(func, arr, window_diameter, pad=False, **kwargs):
     """Call a centered bottleneck moving window function on an array, optionally padding with the edge values to keep
     the same shape. Window moves through axis 0.

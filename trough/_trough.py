@@ -4,11 +4,7 @@ import pandas
 from skimage import measure, morphology
 import cvxpy as cp
 import multiprocessing
-from scipy import stats
-import matplotlib.pyplot as plt
-import os
 
-from sklearn.metrics.pairwise import rbf_kernel
 from scipy.sparse import csr_matrix
 
 

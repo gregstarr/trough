@@ -24,7 +24,6 @@ def test_process_arb(test_dates, download_arb_data):
 
 
 def test_process_tec(test_dates, download_tec_data):
-    pytest.skip("not finished")
     start_date, end_date = test_dates
     with TemporaryDirectory() as tempdir:
         with trough.config.temp_config(processed_tec_dir=tempdir) as cfg:

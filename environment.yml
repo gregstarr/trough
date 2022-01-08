@@ -10,6 +10,7 @@ dependencies:
    - bs4
    - pandas
    - pytables
+   - bottleneck
    - pip
    - pip:
       - apexpy
