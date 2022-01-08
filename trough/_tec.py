@@ -64,6 +64,30 @@ def open_madrigal_file(fn):
     return tec, timestamps, lat, lon
 
 
+def get_tec_data(start_date, end_date):
+    """Gets TEC and timestamps
+    """
+    tec = []
+    ut = []
+    file_dates = np.arange(
+        start_date.astype('datetime64[M]'),
+        end_date.astype('datetime64[M]') + 1,
+        np.timedelta64(1, 'M')
+    )
+    file_dates = trough_utils.decompose_datetime64(file_dates)
+    for i in range(file_dates.shape[0]):
+        y = file_dates[i, 0]
+        m = file_dates[i, 1]
+        fn = Path(config.processed_tec_dir) / f"tec_{y:04d}_{m:02d}.h5"
+        with h5py.File(fn, 'r') as f:
+            tec.append(f['tec'][()])
+            ut.append(f['times'][()])
+    tec = np.concatenate(tec, axis=0)
+    times = np.concatenate(ut, axis=0).astype('datetime64[s]')
+    mask = (times >= start_date) & (times < end_date)
+    return tec[mask], times[mask]
+
+
 def assemble_binning_args(mlat, mlt, tec, times, map_period=np.timedelta64(1, 'h')):
     """Creates a list of tuple arguments to be passed to `calculate_bins`. `calculate_bins` is called by the process
     pool manager using each tuple in the list returned by this function as arguments. Each set of arguments corresponds
@@ -72,7 +96,7 @@ def assemble_binning_args(mlat, mlt, tec, times, map_period=np.timedelta64(1, 'h
 
     Parameters
     ----------
-    mlat, mlt, tec, times, ssmlon: numpy.ndarray[float]
+    mlat, mlt, tec, times: numpy.ndarray[float]
     map_period: {np.timedelta64, int}
 
     Returns

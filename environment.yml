@@ -11,6 +11,7 @@ dependencies:
    - pandas
    - pytables
    - bottleneck
+   - cvxpy
    - pip
    - pip:
       - apexpy

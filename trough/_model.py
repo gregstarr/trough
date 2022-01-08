@@ -3,6 +3,8 @@ import apexpy
 from scipy.interpolate import interp1d
 import datetime
 
+import trough._aux_data as trough_data
+
 
 def get_model(ut, mlt_vals):
     """Get magnetic latitudes of the trough according to the model in Deminov 2017
@@ -19,10 +21,10 @@ def get_model(ut, mlt_vals):
     if np.issubdtype(ut.dtype, np.datetime64):
         ut = ut.copy().astype('datetime64[s]').astype(int)
     kp = _get_weighted_kp(ut)
-    converter = apexpy.Apex(date=datetime.datetime.fromtimestamp(ut[0]))
+    apex = apexpy.Apex(date=datetime.datetime.fromtimestamp(ut[0]))
     mlat = 65.5 * np.ones((ut.shape[0], mlt_vals.shape[0]))
     for i in range(10):
-        glat, glon = convert.mlt_to_geo_array(mlat, mlt_vals[None, :], ut[:, None], 350, converter)
+        glat, glon = apex.convert(mlat, mlt_vals[None, :], 'mlt', 'geo', 350, ut[:, None])
         mlat = _model_subroutine_lat(mlt_vals[None, :], glon, kp[:, None])
     return mlat
 
@@ -45,29 +47,12 @@ def _model_subroutine_lat(mlt, glon, kp):
     return 65.5 - 2.4 * kp + phi_t + phi_lon * np.exp(-.3 * kp)
 
 
-def _get_weighted_kp(ut, fn=None, tau=.6, T=10):
+def _get_weighted_kp(ut, tau=.6, T=10):
     """Get a weighed sum of kp values over time. See paper for details.
-
-    Parameters
-    ----------
-    ut: int
-        unix timestamp to get the weighted kp for
-    fn: str
-        file name with kp and ap downloaded from http://wdc.kugi.kyoto-u.ac.jp/kp/index.html#LIST
-    tau: float
-        decay factor to weight previous time steps with
-    T: int
-        number of previous time steps to include
-
-    Returns
-    -------
-    weighted kp: float
     """
-    if fn is None:
-        fn = config.kp_file
-    df = io.get_gm_index_kyoto(fn)
-    ap = df['ap'].values
-    times = np.array(df['ap'].index.values.astype(float) / 1e9, dtype=int)
+    omni = trough_data.get_omni_data(ut[0].astype('datetime64[s]'), ut[-1].astype('datetime64[s]'))
+    ap = omni['ap'].values
+    times = np.array(omni.index.values.astype(float) / 1e9, dtype=int)
     prehistory = np.column_stack([ap[T - i - 1:ap.shape[0] - i] for i in range(T)])
     weight_factors = tau ** np.arange(T)
     ap_tau = np.sum((1 - tau) * prehistory * weight_factors, axis=1)

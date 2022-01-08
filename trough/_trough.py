@@ -41,7 +41,7 @@ def preprocess_interval(tec, times, min_val=0, max_val=100, bg_est_shape=(3, 15,
     # estimate background
     bg = estimate_background(log_tec, bg_est_shape)
     # subtract background
-    log_tec, t, = utils.moving_func_trim(bg_est_shape[0], log_tec, times)
+    log_tec, t, = trough_utils.moving_func_trim(bg_est_shape[0], log_tec, times)
     x = log_tec - bg
     return x, t
 
@@ -90,7 +90,7 @@ def get_rbf_matrix(shape, bandwidth=1):
     X, Y = np.meshgrid(np.arange(shape[1]), np.arange(shape[0]))
     xy = np.column_stack((X.ravel(), Y.ravel()))
     gamma = np.log(2) / bandwidth ** 2
-    basis = rbf_kernel(xy, xy, gamma)
+    basis = np.exp(-1 * gamma * np.sum((xy[:, None, :] - xy[None, :, :]) ** 2, axis=-1))
     basis[basis < .01] = 0
     return csr_matrix(basis)
 
