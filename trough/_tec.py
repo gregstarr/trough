@@ -178,6 +178,7 @@ def process_month(month):
 
 
 def process_tec_dataset(start_date, end_date):
+    Path(config.processed_tec_dir).mkdir(exist_ok=True, parents=True)
     start_date = np.datetime64(start_date).astype('datetime64[M]')
     end_date = np.datetime64(end_date).astype('datetime64[M]')
     months = np.arange(start_date, end_date + 1, np.timedelta64(1, 'M'))

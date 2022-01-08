@@ -1,6 +1,7 @@
 import numpy as np
 import datetime
 import h5py
+from skimage.util import view_as_windows
 
 
 def datetime64_to_datetime(dt64):

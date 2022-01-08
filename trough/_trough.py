@@ -27,7 +27,7 @@ def estimate_background(tec, patch_shape):
     numpy.ndarray[float]
     """
     assert all([2 * (p // 2) + 1 == p for p in patch_shape]), "patch_shape must be all odd numbers"
-    patches = utils.extract_patches(tec, patch_shape)
+    patches = trough_utils.extract_patches(tec, patch_shape)
     return bn.nanmean(patches.reshape((tec.shape[0] - patch_shape[0] + 1,) + tec.shape[1:] + (-1,)), axis=-1)
 
 
@@ -180,7 +180,8 @@ def label_trough_one_year(year):
     one_h = np.timedelta64(1, 'h')
     params = config.trough_id_params
 
-    days = np.arange(year, year + np.timedelta64(1, 'Y'), np.timedelta64(1, 'D'))
+    start_date = np.datetime64(f"{year}")
+    days = np.arange(start_date, start_date + np.timedelta64(1, 'Y'), np.timedelta64(1, 'D'))
     trough_labels = []
     trough_times = []
     for day in days:
@@ -217,4 +218,3 @@ def label_trough_one_year(year):
 def label_trough(start_date, end_date):
     for year in range(start_date.year, end_date.year + 1):
         label_trough_one_year(year)
-

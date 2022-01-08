@@ -119,12 +119,14 @@ def _process_auroral_boundary_dataset_year(year):
 
 
 def process_auroral_boundary_dataset(start_date, end_date):
+    Path(config.processed_arb_dir).mkdir(exist_ok=True, parents=True)
     for year in range(start_date.year, end_date.year + 1):
         _process_auroral_boundary_dataset_year(year)
 
 
 def process_omni_dataset(start_date, end_date):
     output_path = Path(config.processed_omni_dir) / 'omni.h5'
+    output_path.parent.mkdir(exist_ok=True, parents=True)
     data = []
     for path in Path(config.download_omni_dir).glob('*.dat'):
         data.append(open_downloaded_omni_file(path))
