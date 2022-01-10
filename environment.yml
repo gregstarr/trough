@@ -14,5 +14,4 @@ dependencies:
    - cvxpy
    - pip
    - pip:
-      - apexpy
       - madrigalWeb

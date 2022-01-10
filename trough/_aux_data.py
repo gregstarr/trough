@@ -57,9 +57,9 @@ def get_arb_data(start_date, end_date):
     file_dates = trough_utils.decompose_datetime64(file_dates)
     for i in range(file_dates.shape[0]):
         y = file_dates[i, 0]
-        fn = Path(config.processed_tec_dir) / f"arb_{y:04d}.h5"
+        fn = Path(config.processed_arb_dir) / f"arb_{y:04d}.h5"
         with h5py.File(fn, 'r') as f:
-            arb.append(f['tec'][()])
+            arb.append(f['mlat'][()])
             ut.append(f['times'][()])
     arb = np.concatenate(arb, axis=0)
     times = np.concatenate(ut, axis=0).astype('datetime64[s]')
@@ -131,5 +131,4 @@ def process_omni_dataset(start_date, end_date):
     for path in Path(config.download_omni_dir).glob('*.dat'):
         data.append(open_downloaded_omni_file(path))
     data = pandas.concat(data)
-    data = data[start_date:end_date]
     data.to_hdf(output_path, 'data')

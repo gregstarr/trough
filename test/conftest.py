@@ -36,8 +36,8 @@ def setup_cfg(skip_ftp):
 
 @pytest.fixture(scope='session')
 def test_dates():
-    start_date = datetime(2021, 1, 1, 6, 0, 0)
-    end_date = datetime(2021, 1, 1, 18, 0, 0)
+    start_date = datetime(2021, 1, 3, 6, 0, 0)
+    end_date = datetime(2021, 1, 3, 18, 0, 0)
     yield start_date, end_date
 
 

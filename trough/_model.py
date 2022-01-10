@@ -50,7 +50,10 @@ def _model_subroutine_lat(mlt, glon, kp):
 def _get_weighted_kp(ut, tau=.6, T=10):
     """Get a weighed sum of kp values over time. See paper for details.
     """
-    omni = trough_data.get_omni_data(ut[0].astype('datetime64[s]'), ut[-1].astype('datetime64[s]'))
+    omni = trough_data.get_omni_data(
+        ut[0].astype('datetime64[s]') - np.timedelta64(12, 'h'),
+        ut[-1].astype('datetime64[s]') + np.timedelta64(12, 'h')
+    )
     ap = omni['ap'].values
     times = np.array(omni.index.values.astype(float) / 1e9, dtype=int)
     prehistory = np.column_stack([ap[T - i - 1:ap.shape[0] - i] for i in range(T)])
