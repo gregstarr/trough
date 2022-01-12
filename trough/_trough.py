@@ -1,3 +1,4 @@
+import h5py
 import numpy as np
 import bottleneck as bn
 import pandas
@@ -6,6 +7,7 @@ import cvxpy as cp
 import multiprocessing
 from scipy.sparse import csr_matrix
 from pathlib import Path
+from datetime import datetime
 
 from trough import config
 import trough._tec as trough_tec
@@ -60,20 +62,20 @@ def fix_boundaries(labels):
     return fixed
 
 
-def remove_auroral(inp, arb, offset=3):
+def remove_auroral(inp, arb, mlat_grid, offset=3):
     output = inp.copy()
-    output *= (config.mlat_grid[None, :, :] < arb[:, None, :] + offset)
+    output *= (mlat_grid[None, :, :] < arb[:, None, :] + offset)
     return output
 
 
-def postprocess(initial_trough, perimeter_th=50, area_th=1, arb=None, closing_r=0):
+def postprocess(initial_trough, mlat_grid, perimeter_th=50, area_th=1, arb=None, closing_r=0):
     trough = initial_trough.copy()
     if closing_r > 0:
         selem = morphology.disk(closing_r, dtype=bool)[:, :, None]
         trough = np.pad(trough, ((0, 0), (0, 0), (closing_r, closing_r)), 'wrap')
         trough = morphology.binary_closing(trough, selem)[:, :, closing_r:-closing_r]
     if arb is not None:
-        trough = remove_auroral(trough, arb)
+        trough = remove_auroral(trough, arb, mlat_grid)
     for t in range(trough.shape[0]):
         tmap = trough[t]
         labeled = measure.label(tmap, connectivity=2)
@@ -121,23 +123,15 @@ def get_tv_matrix(im_shape, hw=1, vw=1):
 
 
 def get_optimization_args(x, times, model_mlat, model_weight_max, rbf_bw, tv_hw, tv_vw, l2_weight, tv_weight,
-                          prior_order, mlat_grid=None):
-    if mlat_grid is None:
-        mlat_grid = config.mlat_grid
+                          mlat_grid):
     all_args = []
     # get rbf basis matrix
     basis = get_rbf_matrix(x.shape[1:], rbf_bw)
     # get tv matrix
     tv = get_tv_matrix(x.shape[1:], tv_hw, tv_vw) * tv_weight
-    cos_ = np.cos(np.radians(mlat_grid)) + .5
     for i in range(times.shape[0]):
         # l2 norm cost away from model
-        if prior_order == 1:
-            l2 = abs(mlat_grid - model_mlat[i, :])
-        elif prior_order == 2:
-            l2 = (mlat_grid - model_mlat[i, :]) ** 2
-        else:
-            raise Exception("Invalid prior order")
+        l2 = abs(mlat_grid - model_mlat[i, :])
         l2 -= l2.min()
         l2 = (model_weight_max - 1) * l2 / l2.max() + 1
         l2 *= l2_weight
@@ -182,6 +176,7 @@ def label_trough_one_year(year):
 
     start_date = np.datetime64(f"{year}")
     days = np.arange(start_date, start_date + np.timedelta64(1, 'Y'), np.timedelta64(1, 'D'))
+    mlt_grid, mlat_grid = np.meshgrid(config.get_mlt_vals(), config.get_mlat_vals())
     trough_labels = []
     trough_times = []
     for day in days:
@@ -191,6 +186,8 @@ def label_trough_one_year(year):
         tec_end = end_time + (np.floor(params.bg_est_shape[0] / 2)) * one_h
 
         tec, tec_times = trough_tec.get_tec_data(tec_start, tec_end)
+        if tec.size == 0:
+            continue
         x, times = preprocess_interval(tec, tec_times, bg_est_shape=params.bg_est_shape)
         arb, _ = trough_data.get_arb_data(start_time, end_time)
         print("Setting up inversion optimization")
@@ -198,7 +195,7 @@ def label_trough_one_year(year):
         model_mlat = trough_model.get_model(ut, config.get_mlt_vals())
 
         args = get_optimization_args(x, times, model_mlat, params.model_weight_max, params.rbf_bw, params.tv_hw,
-                                     params.tv_vw, params.l2_weight, params.tv_weight, params.prior_order)
+                                     params.tv_vw, params.l2_weight, params.tv_weight, mlat_grid)
         # run optimization
         print("Running inversion optimization")
         model_output = run_multiple(args)
@@ -206,7 +203,7 @@ def label_trough_one_year(year):
         initial_trough = model_output >= params.threshold
         # postprocess
         print("Postprocessing inversion results")
-        trough_labels.append(postprocess(initial_trough, params.perimeter_th, params.area_th, arb, params.closing_rad))
+        trough_labels.append(postprocess(initial_trough, mlat_grid, params.perimeter_th, params.area_th, arb, params.closing_rad))
         trough_times.append(tec_times)
     trough_labels = np.concatenate(trough_labels, axis=0)
     trough_times = np.concatenate(trough_times, axis=0)
@@ -215,6 +212,20 @@ def label_trough_one_year(year):
     trough_utils.write_h5(output_fn, labels=trough_labels, times=trough_times.astype(float))
 
 
-def label_trough(start_date, end_date):
-    for year in range(start_date.year, end_date.year + 1):
+def _get_possible_trough_interval():
+    tec_files = list(Path(config.processed_tec_dir).glob("*.h5"))
+    with h5py.File(tec_files[0], 'r') as f:
+        start_date = f['times'][0]
+        end_date = f['times'][-1]
+    if len(tec_files) > 1:
+        with h5py.File(tec_files[-1], 'r') as f:
+            end_date = f['times'][-1]
+    return start_date.astype('datetime64[s]'), end_date.astype('datetime64[s]')
+
+
+def label_trough():
+    start_date, end_date = _get_possible_trough_interval()
+    start_year = start_date.astype('datetime64[Y]').astype(int) + 1970
+    end_year = end_date.astype('datetime64[Y]').astype(int) + 1970
+    for year in range(start_year, end_year + 1):
         label_trough_one_year(year)

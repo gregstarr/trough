@@ -67,6 +67,13 @@ def get_arb_data(start_date, end_date):
     return arb[mask], times[mask]
 
 
+def _parse_arb_fn(path):
+    sat_name = path.name[:7]
+    date1 = datetime.strptime(path.name[25:39], "%Y%jT%H%M%S")
+    date2 = datetime.strptime(path.name[40:54], "%Y%jT%H%M%S")
+    return sat_name, date1, date2
+
+
 def _process_auroral_boundary_dataset_year(year):
     logger.info(f"processing arb data for {year}")
     output_path = Path(config.processed_arb_dir) / f"arb_{year}.h5"
@@ -78,9 +85,7 @@ def _process_auroral_boundary_dataset_year(year):
     data = {field: [] for field in _arb_fields}
     data['sat'] = []
     for path in Path(config.download_arb_dir).glob('*.nc'):
-        sat_name = path.name[:7]
-        date1 = datetime.strptime(path.name[25:39], "%Y%jT%H%M%S")
-        date2 = datetime.strptime(path.name[40:54], "%Y%jT%H%M%S")
+        sat_name, date1, date2 = _parse_arb_fn(path)
         if start_date > date2 or end_date < date1:
             continue
         data['sat'].append(sat_name)
@@ -118,13 +123,16 @@ def _process_auroral_boundary_dataset_year(year):
     trough_utils.write_h5(output_path, times=ref_times, mlat=mlat)
 
 
-def process_auroral_boundary_dataset(start_date, end_date):
+def process_auroral_boundary_dataset():
+    arb_file_info = [_parse_arb_fn(path) for path in Path(config.download_arb_dir).glob("*.nc")]
+    min_date = min([start_date for sat_name, start_date, end_date in arb_file_info])
+    max_date = max([end_date for sat_name, start_date, end_date in arb_file_info])
     Path(config.processed_arb_dir).mkdir(exist_ok=True, parents=True)
-    for year in range(start_date.year, end_date.year + 1):
+    for year in range(min_date.year, max_date.year + 1):
         _process_auroral_boundary_dataset_year(year)
 
 
-def process_omni_dataset(start_date, end_date):
+def process_omni_dataset():
     output_path = Path(config.processed_omni_dir) / 'omni.h5'
     output_path.parent.mkdir(exist_ok=True, parents=True)
     data = []

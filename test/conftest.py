@@ -68,6 +68,6 @@ def download_tec_data(setup_cfg, test_dates):
 @pytest.fixture(scope='session')
 def process_all_data(setup_cfg, test_dates, download_omni_data, download_arb_data, download_tec_data):
     logger.info('process all fixture start')
-    trough.scripts.process_all(*test_dates)
+    trough.scripts.process_all()
     yield
     logger.info('process all fixture end')

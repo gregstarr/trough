@@ -6,6 +6,7 @@ from pathlib import Path
 import h5py
 import logging
 import functools
+from datetime import datetime
 
 import trough.utils as trough_utils
 from trough import config
@@ -152,12 +153,13 @@ def get_mag_grid(converter):
     return mlat, mlon
 
 
-def process_month(month):
+def process_interval(start_date, end_date):
     """Processes an interval of madrigal data and writes to files.
     """
-    apex = apexpy.Apex(trough_utils.datetime64_to_datetime(month))
+    logger.info(f"Processing interval: {start_date, end_date}")
+    apex = apexpy.Apex(trough_utils.datetime64_to_datetime(start_date))
     mlat, mlon = get_mag_grid(apex)
-    tec, ts = get_madrigal_data(month, month + 1)
+    tec, ts = get_madrigal_data(start_date, end_date)
     logger.info("Converting coordinates")
     mlt = apex.mlon2mlt(mlon[None, :, :], ts[:, None, None])
     mlat = mlat[None, :, :] * np.ones((ts.shape[0], 1, 1))
@@ -172,15 +174,25 @@ def process_month(month):
     times = np.array([r[0] for r in pool_result])
     tec = np.array([r[1] for r in pool_result])
 
-    dd = trough_utils.decompose_datetime64(month)
+    dd = trough_utils.decompose_datetime64(start_date)
     output_fn = Path(config.processed_tec_dir) / f"tec_{dd[0, 0]:04d}_{dd[0, 1]:02d}.h5"
     trough_utils.write_h5(output_fn, times=times.astype('datetime64[s]').astype(int), tec=tec)
 
 
-def process_tec_dataset(start_date, end_date):
+def _parse_madrigal_fn(path):
+    date = datetime.strptime(path.name[3:9], "%y%m%d")
+    return date
+
+
+def process_tec_dataset():
+    madrigal_dates = [_parse_madrigal_fn(path) for path in Path(config.download_tec_dir).glob("*.hdf5")]
+    min_date = np.datetime64(min(madrigal_dates))
+    max_date = np.datetime64(max(madrigal_dates))
     Path(config.processed_tec_dir).mkdir(exist_ok=True, parents=True)
-    start_date = np.datetime64(start_date).astype('datetime64[M]')
-    end_date = np.datetime64(end_date).astype('datetime64[M]')
+    start_date = min_date.astype('datetime64[M]')
+    end_date = max_date.astype('datetime64[M]')
     months = np.arange(start_date, end_date + 1, np.timedelta64(1, 'M'))
     for month in months:
-        process_month(month)
+        interval_start = max(min_date, month)
+        interval_end = max(max_date, month + 1)
+        process_interval(interval_start, interval_end)

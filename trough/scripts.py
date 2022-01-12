@@ -52,32 +52,32 @@ def download_all(start_date, end_date):
     download_omni(start_date, end_date)
 
 
-def process_tec(start_date, end_date):
-    logger.info(f"running 'process_tec', start date: {start_date}, end date: {end_date}")
-    trough_tec.process_tec_dataset(start_date, end_date)
+def process_tec():
+    logger.info(f"running 'process_tec'")
+    trough_tec.process_tec_dataset()
 
 
-def process_arb(start_date, end_date):
-    logger.info(f"running 'process_arb', start date: {start_date}, end date: {end_date}")
-    trough_prepare.process_auroral_boundary_dataset(start_date, end_date)
+def process_arb():
+    logger.info(f"running 'process_arb'")
+    trough_prepare.process_auroral_boundary_dataset()
 
 
-def process_omni(start_date, end_date):
-    logger.info(f"running 'process_omni', start date: {start_date}, end date: {end_date}")
-    trough_prepare.process_omni_dataset(start_date, end_date)
+def process_omni():
+    logger.info(f"running 'process_omni'")
+    trough_prepare.process_omni_dataset()
 
 
-def process_all(start_date, end_date):
-    process_tec(start_date, end_date)
-    process_arb(start_date, end_date)
-    process_omni(start_date, end_date)
+def process_all():
+    process_tec()
+    process_arb()
+    process_omni()
 
 
-def label_trough(start_date, end_date):
-    trough_label.label_trough(start_date, end_date)
+def label_trough():
+    trough_label.label_trough()
 
 
 def full_run(start_date, end_date):
     download_all(start_date, end_date)
-    process_all(start_date, end_date)
-    label_trough(start_date, end_date)
+    process_all()
+    label_trough()
