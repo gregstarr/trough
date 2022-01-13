@@ -1,10 +1,8 @@
 import logging
+from pathlib import Path
 
-from trough import config, InvalidConfiguration
-import trough._download as trough_download
-import trough._aux_data as trough_prepare
-import trough._tec as trough_tec
-import trough._trough as trough_label
+from trough import config
+from trough import _download, _tec, _arb, _omni, _trough
 
 
 logger = logging.getLogger(__name__)
@@ -13,35 +11,21 @@ logger = logging.getLogger(__name__)
 def download_tec(start_date, end_date):
     user_data = [config.madrigal_user_name, config.madrigal_user_email, config.madrigal_user_affil]
     logger.info(f"running 'download_tec', start date: {start_date}, end date: {end_date}, user data: {user_data}")
-    if None in user_data:
-        raise InvalidConfiguration("To download from Madrigal, user name, email, and affiliation must be specified")
-    downloader = trough_download.MadrigalTecDownloader(config.download_tec_dir, *user_data)
+    downloader = _download.MadrigalTecDownloader(config.download_tec_dir, *user_data)
     downloader.download(start_date, end_date)
     logger.info("'download_tec' completed")
 
 
 def download_arb(start_date, end_date):
     logger.info(f"running 'download_arb', start date: {start_date}, end date: {end_date}")
-    if config.nasa_spdf_download_method == 'ftp':
-        downloader = trough_download.AuroralBoundaryFtpDownloader(config.download_arb_dir)
-    elif config.nasa_spdf_download_method == 'http':
-        downloader = trough_download.AuroralBoundaryHttpDownloader(config.download_arb_dir)
-    else:
-        raise InvalidConfiguration(f"nasa spdf download method (given: {config.nasa_spdf_download_method}) "
-                                   f"must be 'ftp' or 'http'")
+    downloader = _download.ArbDownloader(config.download_arb_dir, config.nasa_spdf_download_method)
     downloader.download(start_date, end_date)
     logger.info("'download_arb' completed")
 
 
 def download_omni(start_date, end_date):
     logger.info(f"running 'download_omni', start date: {start_date}, end date: {end_date}")
-    if config.nasa_spdf_download_method == 'ftp':
-        downloader = trough_download.OmniFtpDownloader(config.download_omni_dir)
-    elif config.nasa_spdf_download_method == 'http':
-        downloader = trough_download.OmniHttpDownloader(config.download_omni_dir)
-    else:
-        raise InvalidConfiguration(f"nasa spdf download method (given: {config.nasa_spdf_download_method}) "
-                                   f"must be 'ftp' or 'http'")
+    downloader = _download.OmniDownloader(config.download_omni_dir, config.nasa_spdf_download_method)
     downloader.download(start_date, end_date)
     logger.info("'download_omni' completed")
 
@@ -52,32 +36,35 @@ def download_all(start_date, end_date):
     download_omni(start_date, end_date)
 
 
-def process_tec():
+def process_tec(start_date, end_date):
     logger.info(f"running 'process_tec'")
-    trough_tec.process_tec_dataset()
+    _tec.process_tec_dataset(start_date, end_date)
 
 
-def process_arb():
+def process_arb(start_date, end_date):
     logger.info(f"running 'process_arb'")
-    trough_prepare.process_auroral_boundary_dataset()
+    _arb.process_auroral_boundary_dataset(start_date, end_date)
 
 
 def process_omni():
     logger.info(f"running 'process_omni'")
-    trough_prepare.process_omni_dataset()
+    _omni.process_omni_dataset(config.download_omni_dir, Path(config.processed_omni_file))
 
 
-def process_all():
-    process_tec()
-    process_arb()
+def process_all(start_date, end_date):
+    logger.info(f"running 'process_all'")
+    process_tec(start_date, end_date)
+    process_arb(start_date, end_date)
     process_omni()
 
 
-def label_trough():
-    trough_label.label_trough()
+def label_trough(start_date, end_date):
+    logger.info(f"running 'label_trough'")
+    _trough.label_trough_dataset(start_date, end_date)
 
 
 def full_run(start_date, end_date):
+    logger.info(f"running 'full_run'")
     download_all(start_date, end_date)
-    process_all()
-    label_trough()
+    process_all(start_date, end_date)
+    label_trough(start_date, end_date)

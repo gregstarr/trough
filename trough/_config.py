@@ -15,10 +15,6 @@ import typing
 import numpy as np
 
 
-class InvalidConfiguration(Exception):
-    ...
-
-
 @dataclasses.dataclass
 class TroughIdParams:
     bg_est_shape: typing.Tuple[int, int, int] = (1, 19, 17)
@@ -46,7 +42,7 @@ def _get_default_directory_structure(base_dir):
     download_omni_dir = download_base / 'omni'
     processed_tec_dir = processed_base / 'tec'
     processed_arb_dir = processed_base / 'arb'
-    processed_omni_dir = processed_base / 'omni'
+    processed_omni_file = processed_base / 'omni.nc'
     processed_labels_dir = processed_base / 'labels'
     return {
         'download_tec_dir': str(download_tec_dir),
@@ -54,7 +50,7 @@ def _get_default_directory_structure(base_dir):
         'download_omni_dir': str(download_omni_dir),
         'processed_tec_dir': str(processed_tec_dir),
         'processed_arb_dir': str(processed_arb_dir),
-        'processed_omni_dir': str(processed_omni_dir),
+        'processed_omni_file': str(processed_omni_file),
         'processed_labels_dir': str(processed_labels_dir),
     }
 
@@ -69,7 +65,7 @@ class Config:
         self.download_omni_dir = default_dirs['download_omni_dir']
         self.processed_tec_dir = default_dirs['processed_tec_dir']
         self.processed_arb_dir = default_dirs['processed_arb_dir']
-        self.processed_omni_dir = default_dirs['processed_omni_dir']
+        self.processed_omni_file = default_dirs['processed_omni_file']
         self.processed_labels_dir = default_dirs['processed_labels_dir']
         self.trough_id_params = TroughIdParams()
         self.madrigal_user_name = None
@@ -105,7 +101,7 @@ class Config:
         self.download_omni_dir = config_dict.get('download_omni_dir', self.download_omni_dir)
         self.processed_tec_dir = config_dict.get('processed_tec_dir', self.processed_tec_dir)
         self.processed_arb_dir = config_dict.get('processed_arb_dir', self.processed_arb_dir)
-        self.processed_omni_dir = config_dict.get('processed_omni_dir', self.processed_omni_dir)
+        self.processed_omni_file = config_dict.get('processed_omni_file', self.processed_omni_file)
         self.processed_labels_dir = config_dict.get('processed_labels_dir', self.processed_labels_dir)
         self.trough_id_params = config_dict.get('trough_id_params', self.trough_id_params)
         if not isinstance(self.trough_id_params, TroughIdParams):

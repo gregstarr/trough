@@ -1,19 +1,63 @@
-import h5py
 import numpy as np
+import xarray as xr
 import bottleneck as bn
 import pandas
 from skimage import measure, morphology
+from sklearn.metrics.pairwise import rbf_kernel
 import cvxpy as cp
 import multiprocessing
 from scipy.sparse import csr_matrix
 from pathlib import Path
-from datetime import datetime
+from apexpy import Apex
+from datetime import datetime, timedelta
+import logging
 
-from trough import config
-import trough._tec as trough_tec
-import trough._aux_data as trough_data
-import trough._model as trough_model
-import trough.utils as trough_utils
+import trough
+
+
+logger = logging.getLogger(__name__)
+
+
+def get_model(tec_data, omni_file):
+    """Get magnetic latitudes of the trough according to the model in Deminov 2017
+    for a specific time and set of magnetic local times.
+    """
+    omni_data = xr.open_dataset(omni_file)
+    kp = _get_weighted_kp(tec_data.time, omni_data)
+    apex = Apex(date=trough.utils.datetime64_to_datetime(tec_data.time.values[0]))
+    mlat = 65.5 * np.ones((tec_data.time.shape[0], tec_data.mlt.shape[0]))
+    for i in range(10):
+        glat, glon = apex.convert(mlat, tec_data.mlt.values[None, :], 'mlt', 'geo', 350, tec_data.time.values[:, None])
+        mlat = _model_subroutine_lat(tec_data.mlt.values[None, :], glon, kp[:, None])
+    tec_data['model'] = xr.DataArray(mlat, coords={'time': tec_data.time, 'mlt': tec_data.mlt})
+
+
+def _model_subroutine_lat(mlt, glon, kp):
+    """Get's model output mlat given MLT, geographic lon and weighted kp
+
+    Parameters
+    ----------
+    mlt: numpy.ndarray (n_mlt, )
+    glon: numpy.ndarray (n_mlt, )
+    kp: float
+
+    Returns
+    -------
+    mlat: numpy.ndarray (n_t, n_mlt)
+    """
+    phi_t = 3.16 - 5.6 * np.cos(np.deg2rad(15 * (mlt - 2.4))) + 1.4 * np.cos(np.deg2rad(15 * (2 * mlt - .8)))
+    phi_lon = .85 * np.cos(np.deg2rad(glon + 63)) - .52 * np.cos(np.deg2rad(2 * glon + 5))
+    return 65.5 - 2.4 * kp + phi_t + phi_lon * np.exp(-.3 * kp)
+
+
+def _get_weighted_kp(times, omni_data, tau=.6, T=10):
+    """Get a weighed sum of kp values over time. See paper for details.
+    """
+    ap = omni_data.sel(time=slice(times[0] - np.timedelta64(T, 'h'), times[-1]))['ap'].values
+    prehistory = np.column_stack([ap[T - i:ap.shape[0] - i] for i in range(T)])
+    weight_factors = tau ** np.arange(T)
+    ap_tau = np.sum((1 - tau) * prehistory * weight_factors, axis=1)
+    return 2.1 * np.log(.2 * ap_tau + 1)
 
 
 def estimate_background(tec, patch_shape):
@@ -29,12 +73,12 @@ def estimate_background(tec, patch_shape):
     numpy.ndarray[float]
     """
     assert all([2 * (p // 2) + 1 == p for p in patch_shape]), "patch_shape must be all odd numbers"
-    patches = trough_utils.extract_patches(tec, patch_shape)
+    patches = trough.utils.extract_patches(tec, patch_shape)
     return bn.nanmean(patches.reshape((tec.shape[0] - patch_shape[0] + 1,) + tec.shape[1:] + (-1,)), axis=-1)
 
 
-def preprocess_interval(tec, times, min_val=0, max_val=100, bg_est_shape=(3, 15, 15)):
-    tec = tec.copy()
+def preprocess_interval(data, min_val=0, max_val=100, bg_est_shape=(1, 15, 15)):
+    tec = data['tec'].values
     # throw away outlier values
     tec[tec > max_val] = np.nan
     tec[tec < min_val] = np.nan
@@ -43,9 +87,10 @@ def preprocess_interval(tec, times, min_val=0, max_val=100, bg_est_shape=(3, 15,
     # estimate background
     bg = estimate_background(log_tec, bg_est_shape)
     # subtract background
-    log_tec, t, = trough_utils.moving_func_trim(bg_est_shape[0], log_tec, times)
     x = log_tec - bg
-    return x, t
+    coords = {'time': data.time, 'mlat': data.mlat, 'mlt': data.mlt}
+    data['x'] = xr.DataArray(x, coords=coords)
+    data['tec'] = xr.DataArray(tec, coords=coords)
 
 
 def fix_boundaries(labels):
@@ -62,37 +107,32 @@ def fix_boundaries(labels):
     return fixed
 
 
-def remove_auroral(inp, arb, mlat_grid, offset=3):
-    output = inp.copy()
-    output *= (mlat_grid[None, :, :] < arb[:, None, :] + offset)
-    return output
+def remove_auroral(data, offset=3):
+    data['labels'] *= data.mlat < (data['arb'] + offset)
 
 
-def postprocess(initial_trough, mlat_grid, perimeter_th=50, area_th=1, arb=None, closing_r=0):
-    trough = initial_trough.copy()
+def postprocess(data, perimeter_th=50, area_th=1, closing_r=0):
     if closing_r > 0:
         selem = morphology.disk(closing_r, dtype=bool)[:, :, None]
-        trough = np.pad(trough, ((0, 0), (0, 0), (closing_r, closing_r)), 'wrap')
-        trough = morphology.binary_closing(trough, selem)[:, :, closing_r:-closing_r]
-    if arb is not None:
-        trough = remove_auroral(trough, arb, mlat_grid)
-    for t in range(trough.shape[0]):
-        tmap = trough[t]
+        data['labels'] = np.pad(data['labels'], ((0, 0), (0, 0), (closing_r, closing_r)), 'wrap')
+        data['labels'] = morphology.binary_closing(data['labels'], selem)[:, :, closing_r:-closing_r]
+    remove_auroral(data)
+    for t in range(data.time.shape[0]):
+        tmap = data['labels'][t].values
         labeled = measure.label(tmap, connectivity=2)
         labeled = fix_boundaries(labeled)
         props = pandas.DataFrame(measure.regionprops_table(labeled, properties=('label', 'area', 'perimeter')))
         error_mask = (props['perimeter'] < perimeter_th) | (props['area'] < area_th)
         for i, r in props[error_mask].iterrows():
             tmap[labeled == r['label']] = 0
-        trough[t] = tmap
-    return trough
+        data['labels'][t] = tmap
 
 
 def get_rbf_matrix(shape, bandwidth=1):
     X, Y = np.meshgrid(np.arange(shape[1]), np.arange(shape[0]))
     xy = np.column_stack((X.ravel(), Y.ravel()))
     gamma = np.log(2) / bandwidth ** 2
-    basis = np.exp(-1 * gamma * np.sum((xy[:, None, :] - xy[None, :, :]) ** 2, axis=-1))
+    basis = rbf_kernel(xy, gamma=gamma)
     basis[basis < .01] = 0
     return csr_matrix(basis)
 
@@ -122,30 +162,26 @@ def get_tv_matrix(im_shape, hw=1, vw=1):
     return csr_matrix(hw * (right + left) + vw * (up + down))
 
 
-def get_optimization_args(x, times, model_mlat, model_weight_max, rbf_bw, tv_hw, tv_vw, l2_weight, tv_weight,
-                          mlat_grid):
+def get_optimization_args(data, model_weight_max, rbf_bw, tv_hw, tv_vw, l2_weight, tv_weight):
     all_args = []
     # get rbf basis matrix
-    basis = get_rbf_matrix(x.shape[1:], rbf_bw)
+    basis = get_rbf_matrix((data.mlat.shape[0], data.mlt.shape[0]), rbf_bw)
     # get tv matrix
-    tv = get_tv_matrix(x.shape[1:], tv_hw, tv_vw) * tv_weight
-    for i in range(times.shape[0]):
+    tv = get_tv_matrix((data.mlat.shape[0], data.mlt.shape[0]), tv_hw, tv_vw) * tv_weight
+    for i in range(data.time.shape[0]):
         # l2 norm cost away from model
-        l2 = abs(mlat_grid - model_mlat[i, :])
+        l2 = abs(data.mlat - data['model']).isel(time=i)
         l2 -= l2.min()
         l2 = (model_weight_max - 1) * l2 / l2.max() + 1
         l2 *= l2_weight
-        fin_mask = np.isfinite(x[i].ravel())
-        args = (cp.Variable(x.shape[1] * x.shape[2]), basis[fin_mask, :], x[i].ravel()[fin_mask], tv, l2.ravel(),
-                times[i], mlat_grid.shape)
+        fin_mask = np.isfinite(np.ravel(data['x'].isel(time=i)))
+        args = (cp.Variable(data.mlat.shape[0] * data.mlt.shape[0]), basis[fin_mask, :],
+                np.ravel(data['x'].isel(time=i))[fin_mask], tv, np.ravel(l2))
         all_args.append(args)
     return all_args
 
 
-def run_single(u, basis, x, tv, l2, t, output_shape):
-    print(t)
-    if x.size == 0:
-        return np.zeros(output_shape)
+def run_single(u, basis, x, tv, l2):
     main_cost = u.T @ basis.T @ x
     tv_cost = cp.norm1(tv @ u)
     l2_cost = l2 @ (u ** 2)
@@ -154,9 +190,9 @@ def run_single(u, basis, x, tv, l2, t, output_shape):
     try:
         prob.solve(solver=cp.GUROBI)
     except Exception as e:
-        print("FAILED, USING ECOS:", e)
+        logger.info(f"FAILED, USING ECOS: {e}")
         prob.solve(solver=cp.ECOS)
-    return u.value.reshape(output_shape)
+    return u.value
 
 
 def run_multiple(args, parallel=True):
@@ -170,62 +206,57 @@ def run_multiple(args, parallel=True):
     return np.stack(results, axis=0)
 
 
-def label_trough_one_year(year):
-    one_h = np.timedelta64(1, 'h')
-    params = config.trough_id_params
+def label_trough_interval(start_date, end_date, params, tec_dir, arb_dir, omni_file):
+    data = trough.get_tec_data(start_date, end_date, tec_dir).to_dataset(name='tec')
+    preprocess_interval(data, bg_est_shape=params.bg_est_shape)
 
-    start_date = np.datetime64(f"{year}")
-    days = np.arange(start_date, start_date + np.timedelta64(1, 'Y'), np.timedelta64(1, 'D'))
-    mlt_grid, mlat_grid = np.meshgrid(config.get_mlt_vals(), config.get_mlat_vals())
-    trough_labels = []
-    trough_times = []
-    for day in days:
-        start_time = day.astype('datetime64[D]').astype('datetime64[s]')
-        end_time = start_time + np.timedelta64(1, 'D')
-        tec_start = start_time - np.floor(params.bg_est_shape[0] / 2) * one_h
-        tec_end = end_time + (np.floor(params.bg_est_shape[0] / 2)) * one_h
-
-        tec, tec_times = trough_tec.get_tec_data(tec_start, tec_end)
-        if tec.size == 0:
-            continue
-        x, times = preprocess_interval(tec, tec_times, bg_est_shape=params.bg_est_shape)
-        arb, _ = trough_data.get_arb_data(start_time, end_time)
-        print("Setting up inversion optimization")
-        ut = times.astype('datetime64[s]').astype(float)
-        model_mlat = trough_model.get_model(ut, config.get_mlt_vals())
-
-        args = get_optimization_args(x, times, model_mlat, params.model_weight_max, params.rbf_bw, params.tv_hw,
-                                     params.tv_vw, params.l2_weight, params.tv_weight, mlat_grid)
-        # run optimization
-        print("Running inversion optimization")
-        model_output = run_multiple(args)
-        # threshold
-        initial_trough = model_output >= params.threshold
-        # postprocess
-        print("Postprocessing inversion results")
-        trough_labels.append(postprocess(initial_trough, mlat_grid, params.perimeter_th, params.area_th, arb, params.closing_rad))
-        trough_times.append(tec_times)
-    trough_labels = np.concatenate(trough_labels, axis=0)
-    trough_times = np.concatenate(trough_times, axis=0)
-
-    output_fn = Path(config.processed_labels_dir) / f"labels_{year}.h5"
-    trough_utils.write_h5(output_fn, labels=trough_labels, times=trough_times.astype(float))
+    data['arb'] = trough.get_arb_data(start_date, end_date, arb_dir)
+    get_model(data, omni_file)
+    args = get_optimization_args(data, params.model_weight_max, params.rbf_bw, params.tv_hw, params.tv_vw,
+                                 params.l2_weight, params.tv_weight)
+    logger.info("Running inversion optimization")
+    data['model_output'] = xr.DataArray(
+        run_multiple(args).reshape((data.time.shape[0], data.mlat.shape[0], data.mlt.shape[0])),
+        coords={
+            'time': data.time,
+            'mlat': data.mlat,
+            'mlt': data.mlt
+        }
+    )
+    # threshold
+    data['labels'] = data['model_output'] >= params.threshold
+    # postprocess
+    logger.info("Postprocessing inversion results")
+    postprocess(data, params.perimeter_th, params.area_th, params.closing_rad)
+    return data
 
 
-def _get_possible_trough_interval():
-    tec_files = list(Path(config.processed_tec_dir).glob("*.h5"))
-    with h5py.File(tec_files[0], 'r') as f:
-        start_date = f['times'][0]
-        end_date = f['times'][-1]
-    if len(tec_files) > 1:
-        with h5py.File(tec_files[-1], 'r') as f:
-            end_date = f['times'][-1]
-    return start_date.astype('datetime64[s]'), end_date.astype('datetime64[s]')
+def label_trough_dataset(start_date, end_date, params=None, tec_dir=None, arb_dir=None, omni_file=None,
+                         output_dir=None):
+    if params is None:
+        params = trough.config.trough_id_params
+    if tec_dir is None:
+        tec_dir = trough.config.processed_tec_dir
+    if arb_dir is None:
+        arb_dir = trough.config.processed_arb_dir
+    if omni_file is None:
+        omni_file = trough.config.processed_omni_file
+    if output_dir is None:
+        output_dir = trough.config.processed_labels_dir
 
-
-def label_trough():
-    start_date, end_date = _get_possible_trough_interval()
-    start_year = start_date.astype('datetime64[Y]').astype(int) + 1970
-    end_year = end_date.astype('datetime64[Y]').astype(int) + 1970
-    for year in range(start_year, end_year + 1):
-        label_trough_one_year(year)
+    Path(output_dir).mkdir(exist_ok=True, parents=True)
+    for year in range(start_date.year, end_date.year + 1):
+        labels = []
+        start = datetime(year, 1, 1, 0, 0)
+        while start.year < year + 1:
+            end = start + timedelta(days=1)
+            if start > end_date or end < start_date:
+                start += timedelta(days=1)
+                continue
+            start = max(start_date, start)
+            end = min(end_date, end)
+            data = label_trough_interval(start, end, params, tec_dir, arb_dir, omni_file)
+            labels.append(data['labels'])
+            start += timedelta(days=1)
+        labels = xr.combine_by_coords(labels)
+        labels.to_netcdf(Path(output_dir) / f"labels_{year:04d}.nc")

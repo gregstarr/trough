@@ -1,0 +1,6 @@
+class InvalidConfiguration(Exception):
+    ...
+
+
+class InvalidProcessDates(Exception):
+    ...

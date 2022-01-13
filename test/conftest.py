@@ -39,35 +39,3 @@ def test_dates():
     start_date = datetime(2021, 1, 3, 6, 0, 0)
     end_date = datetime(2021, 1, 3, 18, 0, 0)
     yield start_date, end_date
-
-
-@pytest.fixture(scope='session')
-def download_omni_data(setup_cfg, test_dates):
-    logger.info('download omni fixture start')
-    trough.scripts.download_omni(*test_dates)
-    yield
-    logger.info('download omni fixture end')
-
-
-@pytest.fixture(scope='session')
-def download_arb_data(setup_cfg, test_dates):
-    logger.info('download arb fixture start')
-    trough.scripts.download_arb(*test_dates)
-    yield
-    logger.info('download arb fixture end')
-
-
-@pytest.fixture(scope='session')
-def download_tec_data(setup_cfg, test_dates):
-    logger.info('download tec fixture start')
-    trough.scripts.download_tec(*test_dates)
-    yield
-    logger.info('download tec fixture end')
-
-
-@pytest.fixture(scope='session')
-def process_all_data(setup_cfg, test_dates, download_omni_data, download_arb_data, download_tec_data):
-    logger.info('process all fixture start')
-    trough.scripts.process_all()
-    yield
-    logger.info('process all fixture end')
