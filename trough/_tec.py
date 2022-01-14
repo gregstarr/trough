@@ -34,7 +34,7 @@ def _get_downloaded_tec_data(start_date, end_date, input_dir):
         logger.info(f"arb file: {path}, info: [{date1}, {date2}], tec: {data[-1]}")
     if len(data) == 0:
         return xr.DataArray()
-    return xr.combine_by_coords(data)
+    return xr.concat(data, 'time')
 
 
 def open_madrigal_file(fn):
@@ -68,7 +68,7 @@ def get_tec_paths(start_date, end_date, processed_dir):
 
 
 def get_tec_data(start_date, end_date, processed_dir):
-    data = xr.combine_by_coords([xr.open_dataarray(file) for file in get_tec_paths(start_date, end_date, processed_dir)])
+    data = xr.concat([xr.open_dataarray(file) for file in get_tec_paths(start_date, end_date, processed_dir)], 'time')
     return data.sel(time=slice(start_date, end_date))
 
 
@@ -135,7 +135,8 @@ def process_interval(start_date, end_date, output_fn, input_dir, sample_dt, mlat
             'time': np.array([_interval.left for _interval, _data in data_groups]),
             'mlat': (mlat_bins[:-1] + mlat_bins[1:]) / 2,
             'mlt': (mlt_bins[:-1] + mlt_bins[1:]) / 2,
-        }
+        },
+        dims=['time', 'mlat', 'mlt']
     )
     tec.to_netcdf(output_fn)
 

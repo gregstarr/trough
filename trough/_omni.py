@@ -31,5 +31,5 @@ def open_downloaded_omni_file(fn):
 def process_omni_dataset(input_dir, output_fn):
     output_path = Path(output_fn)
     output_path.parent.mkdir(exist_ok=True, parents=True)
-    data = xr.combine_by_coords([open_downloaded_omni_file(path) for path in Path(input_dir).glob('*.dat')])
+    data = xr.concat([open_downloaded_omni_file(path) for path in Path(input_dir).glob('*.dat')], 'time')
     data.to_netcdf(output_fn)

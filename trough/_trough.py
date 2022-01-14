@@ -258,5 +258,5 @@ def label_trough_dataset(start_date, end_date, params=None, tec_dir=None, arb_di
             data = label_trough_interval(start, end, params, tec_dir, arb_dir, omni_file)
             labels.append(data['labels'])
             start += timedelta(days=1)
-        labels = xr.combine_by_coords(labels)
+        labels = xr.concat(labels, 'time')
         labels.to_netcdf(Path(output_dir) / f"labels_{year:04d}.nc")

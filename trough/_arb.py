@@ -26,7 +26,7 @@ def get_arb_paths(start_date, end_date, processed_dir):
 
 
 def get_arb_data(start_date, end_date, processed_dir):
-    data = xr.combine_by_coords([xr.open_dataarray(file) for file in get_arb_paths(start_date, end_date, processed_dir)])
+    data = xr.concat([xr.open_dataarray(file) for file in get_arb_paths(start_date, end_date, processed_dir)], 'time')
     return data.sel(time=slice(start_date, end_date))
 
 
@@ -82,7 +82,7 @@ def process_interval(start_date, end_date, output_fn, input_dir, mlt_vals, sampl
     logger.info(f"ref times: [{ref_times[0]}, {ref_times[-1]}]")
     interpolator = interp1d(times.astype('datetime64[s]').astype(float), mlat, axis=0, bounds_error=False)
     mlat = interpolator(ref_times.astype(float))
-    data = xr.DataArray(mlat, coords={'time': ref_times, 'mlt': mlt_vals})
+    data = xr.DataArray(mlat, coords={'time': ref_times, 'mlt': mlt_vals}, dims=['time', 'mlt'])
     data.to_netcdf(output_fn)
 
 
