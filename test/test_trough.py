@@ -21,7 +21,7 @@ def test_preprocess_interval():
     tec[1, 20, 20] = 200
     tec[2, 40, 40] = -5
     coords = {'time': times, 'mlat': np.arange(nlat), 'mlt': np.arange(nlon)}
-    data = xr.DataArray(tec, coords=coords).to_dataset(name='tec')
+    data = xr.DataArray(tec, coords=coords, dims=['time', 'mlat', 'mlt']).to_dataset(name='tec')
     _trough.preprocess_interval(data, bg_est_shape=bg_est_shape)
     assert 'x' in data
     det_log_tec = data['x'].values
@@ -47,8 +47,16 @@ def test_model_artificial_example():
     det_log_tec += np.random.randn(*shp) * .1
     coords = {'time': times, 'mlat': config.get_mlat_vals(), 'mlt': config.get_mlt_vals()}
     data = xr.Dataset({
-        'x': xr.DataArray(det_log_tec, coords=coords),
-        'model': xr.DataArray(np.ones((times.shape[0], mlt_grid.shape[1])) * 65, coords={'time': times, 'mlt': config.get_mlt_vals()}),
+        'x': xr.DataArray(
+            det_log_tec,
+            coords=coords,
+            dims=['time', 'mlat', 'mlt']
+        ),
+        'model': xr.DataArray(
+            np.ones((times.shape[0], mlt_grid.shape[1])) * 65,
+            coords={'time': times, 'mlt': config.get_mlt_vals()},
+            dims=['time', 'mlt']
+        ),
     })
     args = _trough.get_optimization_args(data, 30, 1, 2, 1, .15, .06)
     output = np.stack([_trough.run_single(*a).reshape(mlat_grid.shape) for a in args], axis=0)
@@ -76,8 +84,16 @@ def test_postprocess():
     initial_labels = good_labels + small_reject + boundary_good_labels + boundary_bad_labels + weird_good_labels + high_labels
     coords = {'time': [0], 'mlat': config.get_mlat_vals(), 'mlt': config.get_mlt_vals()}
     data = xr.Dataset({
-        'labels': xr.DataArray(initial_labels[None], coords=coords),
-        'arb': xr.DataArray(arb, coords={'time': [0], 'mlt': config.get_mlt_vals()}),
+        'labels': xr.DataArray(
+            initial_labels[None],
+            coords=coords,
+            dims=['time', 'mlat', 'mlt']
+        ),
+        'arb': xr.DataArray(
+            arb,
+            coords={'time': [0], 'mlt': config.get_mlt_vals()},
+            dims=['time', 'mlt']
+        ),
     })
     _trough.postprocess(data, perimeter_th=50)
     labels = data['labels'].values[0]
@@ -103,8 +119,16 @@ def test_get_optimization_args():
 
     coords = {'time': times, 'mlat': np.arange(D), 'mlt': mlt_vals}
     data = xr.Dataset({
-        'x': xr.DataArray(x, coords=coords),
-        'model': xr.DataArray(arb, coords={'time': times, 'mlt': mlt_vals}),
+        'x': xr.DataArray(
+            x,
+            coords=coords,
+            dims=['time', 'mlat', 'mlt']
+        ),
+        'model': xr.DataArray(
+            arb,
+            coords={'time': times, 'mlt': mlt_vals},
+            dims=['time', 'mlt']
+        ),
     })
     args = _trough.get_optimization_args(data, 10, .5, .5, .5, .5, .5)
     var, basis, x_out, tv, l2 = args[0]

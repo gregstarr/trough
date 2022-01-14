@@ -23,8 +23,7 @@ def open_downloaded_omni_file(fn):
     dates = (data['year'] - 1970).astype('datetime64[Y]') + \
             (data['decimal_day'] - 1).astype('timedelta64[D]') + \
             data['hour'].astype('timedelta64[h]')
-    coords = {'time': dates, 'solar_rotation': xr.DataArray(data['bartels_rotation_number'], {'time': dates})}
-    data = xr.Dataset({key: xr.DataArray(data[key], coords=coords, dims=['time']) for key in _omni_names})
+    data = xr.Dataset({key: xr.DataArray(data[key], coords={'time': dates}, dims=['time']) for key in _omni_names})
     data = data.drop_vars(['year', 'decimal_day', 'hour', 'bartels_rotation_number'])
     return data
 

@@ -31,7 +31,7 @@ def _get_downloaded_tec_data(start_date, end_date, input_dir):
         if start_date > date2 or end_date < date1:
             continue
         data.append(open_madrigal_file(path))
-        logger.info(f"arb file: {path}, info: [{date1}, {date2}], tec: {data}")
+        logger.info(f"arb file: {path}, info: [{date1}, {date2}], tec: {data[-1]}")
     if len(data) == 0:
         return xr.DataArray()
     return xr.combine_by_coords(data)
@@ -113,7 +113,10 @@ def process_interval(start_date, end_date, output_fn, input_dir, sample_dt, mlat
     calc_bins = functools.partial(calculate_bins, mlat_bins=mlat_bins, mlt_bins=mlt_bins)
     ref_times = np.arange(np.datetime64(start_date, 's'), np.datetime64(end_date, 's'), sample_dt)
     mad_data = _get_downloaded_tec_data(start_date, end_date, input_dir)
-    if mad_data.shape == () or mad_data.time.values[0] > ref_times[0] or mad_data.time.values[-1] < ref_times[-1]:
+    if mad_data.shape == () or min(mad_data.time.values) > ref_times[0] or max(mad_data.time.values) < ref_times[-1]:
+        logger.error(f"mad_data shape: {mad_data.shape}")
+        if mad_data.shape != ():
+            logger.error(f"times: {min(mad_data.time.values)} - {max(mad_data.time.values)}")
         raise InvalidProcessDates(f"Need to download full data range before processing")
     mad_data = mad_data.sel(time=slice(ref_times[0], ref_times[-1] + sample_dt))
 

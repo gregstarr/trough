@@ -63,7 +63,10 @@ def process_interval(start_date, end_date, output_fn, input_dir, mlt_vals, sampl
     ref_times = np.arange(np.datetime64(start_date, 's'), np.datetime64(end_date, 's'), sample_dt)
     apex = Apex(date=start_date)
     data, times = _get_downloaded_arb_data(start_date, end_date, input_dir)
-    if times.size == 0 or times[0] > ref_times[0] or times[-1] < ref_times[-1]:
+    if times.size == 0 or min(times) > ref_times[0] or max(times) < ref_times[-1]:
+        logger.error(f"times size: {times.size}")
+        if len(times) > 0:
+            logger.error(f"times: {min(times)} - {max(times)}")
         raise InvalidProcessDates(f"Need to download full data range before processing")
     assert times.shape == np.unique(times).shape, "Non unique times, time to fix"
     logger.info(f"{times.shape[0]} time points")
