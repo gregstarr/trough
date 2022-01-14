@@ -174,7 +174,7 @@ def test_process_trough_interval(test_dates):
                                          config.processed_arb_dir, config.processed_omni_file)
     assert 'labels' in data
     assert 'tec' in data
-    assert data.time.shape[0] == 12
+    assert data.time.shape[0] == 6
     assert data.mlat.shape[0] == 60
     assert data.mlt.shape[0] == 180
     assert np.nanmean(data['tec'].values[data['labels'].values]) < np.nanmean(data['tec'].values[~data['labels'].values])

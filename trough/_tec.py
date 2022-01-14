@@ -31,7 +31,7 @@ def _get_downloaded_tec_data(start_date, end_date, input_dir):
         if start_date > date2 or end_date < date1:
             continue
         data.append(open_madrigal_file(path))
-        logger.info(f"arb file: {path}, info: [{date1}, {date2}], tec: {data[-1]}")
+        logger.info(f"arb file: {path}, info: [{date1}, {date2}], tec size: {data[-1].shape}")
     if len(data) == 0:
         return xr.DataArray()
     return xr.concat(data, 'time')
@@ -99,8 +99,16 @@ def get_mag_coords(apex, mad_data):
             'time': mad_data.time,
             'glat': mad_data.glat,
             'glon': mad_data.glon,
-            'mlat': xr.DataArray(mlat, coords={'glat': mad_data.glat, 'glon': mad_data.glon}),
-            'mlt': xr.DataArray(mlt, coords={'time': mad_data.time, 'glat': mad_data.glat, 'glon': mad_data.glon}),
+            'mlat': xr.DataArray(
+                mlat,
+                coords={'glat': mad_data.glat, 'glon': mad_data.glon},
+                dims=['glat', 'glon']
+            ),
+            'mlt': xr.DataArray(
+                mlt,
+                coords={'time': mad_data.time, 'glat': mad_data.glat, 'glon': mad_data.glon},
+                dims=['time', 'glat', 'glon']
+            ),
         },
         dims=['time', 'glat', 'glon']
     )

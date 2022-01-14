@@ -29,7 +29,11 @@ def get_model(tec_data, omni_file):
     for i in range(10):
         glat, glon = apex.convert(mlat, tec_data.mlt.values[None, :], 'mlt', 'geo', 350, tec_data.time.values[:, None])
         mlat = _model_subroutine_lat(tec_data.mlt.values[None, :], glon, kp[:, None])
-    tec_data['model'] = xr.DataArray(mlat, coords={'time': tec_data.time, 'mlt': tec_data.mlt})
+    tec_data['model'] = xr.DataArray(
+        mlat,
+        coords={'time': tec_data.time, 'mlt': tec_data.mlt},
+        dims=['time', 'mlt']
+    )
 
 
 def _model_subroutine_lat(mlt, glon, kp):
@@ -89,8 +93,8 @@ def preprocess_interval(data, min_val=0, max_val=100, bg_est_shape=(1, 15, 15)):
     # subtract background
     x = log_tec - bg
     coords = {'time': data.time, 'mlat': data.mlat, 'mlt': data.mlt}
-    data['x'] = xr.DataArray(x, coords=coords)
-    data['tec'] = xr.DataArray(tec, coords=coords)
+    data['x'] = xr.DataArray(x, coords=coords, dims=['time', 'mlat', 'mlt'])
+    data['tec'] = xr.DataArray(tec, coords=coords, dims=['time', 'mlat', 'mlt'])
 
 
 def fix_boundaries(labels):
@@ -221,7 +225,8 @@ def label_trough_interval(start_date, end_date, params, tec_dir, arb_dir, omni_f
             'time': data.time,
             'mlat': data.mlat,
             'mlt': data.mlt
-        }
+        },
+        dims=['time', 'mlat', 'mlt']
     )
     # threshold
     data['labels'] = data['model_output'] >= params.threshold
