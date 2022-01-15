@@ -108,3 +108,6 @@ venv.bak/
 
 # tf checkpoints
 dl/cp
+
+# config pointer file
+config_path.txt

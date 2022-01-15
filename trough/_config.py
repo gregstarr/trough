@@ -1,11 +1,3 @@
-"""
-use cases and features:
-    - maintain last config in env trough dir which is loaded by default
-    - directories are set to defaults using appdirs
-    - downloading data to specific directory sets env config
-    - can temporarily use alternative configs with context manager
-    - all directories can be set with base dir or each can be set individually
-"""
 import dataclasses
 from pathlib import Path
 import appdirs
@@ -13,6 +5,7 @@ import json
 import contextlib
 import typing
 import numpy as np
+from datetime import datetime
 
 
 @dataclasses.dataclass
@@ -55,10 +48,24 @@ def _get_default_directory_structure(base_dir):
     }
 
 
+trough_dirs = appdirs.AppDirs(appname='trough')
+
+
+def parse_date(date_str):
+    if len(date_str) == 15:
+        return datetime.strptime(date_str, '%Y%m%d_%H%M%S')
+    if len(date_str) == 13:
+        return datetime.strptime(date_str, '%Y%m%d_%H%M')
+    if len(date_str) == 11:
+        return datetime.strptime(date_str, '%Y%m%d_%H')
+    if len(date_str) == 8:
+        return datetime.strptime(date_str, '%Y%m%d')
+    raise ValueError(f"Invalid date string: {date_str}")
+
+
 class Config:
 
-    def __init__(self):
-        trough_dirs = appdirs.AppDirs(appname='trough')
+    def __init__(self, config_path=None):
         default_dirs = _get_default_directory_structure(trough_dirs.user_data_dir)
         self.download_tec_dir = default_dirs['download_tec_dir']
         self.download_arb_dir = default_dirs['download_arb_dir']
@@ -73,10 +80,21 @@ class Config:
         self.madrigal_user_affil = None
         self.nasa_spdf_download_method = 'ftp'
 
-        self.config_path = Path(__file__).parent / 'trough.json'
-
         self.lat_res = 1
         self.lon_res = 2
+        self.time_res_unit = 'h'
+        self.time_res_n = 1
+
+        self.script_name = 'full_run'
+        self.start_date = None
+        self.end_date = None
+
+        if config_path is not None:
+            self.load_json(config_path)
+
+    def get_config_name(self):
+        cfg = self.dict()
+        return f"{cfg['script_name']}_{cfg['start_date']}_{cfg['end_date']}_config.json"
 
     def get_mlat_bins(self):
         return np.arange(29.5, 90, self.lat_res)
@@ -90,9 +108,14 @@ class Config:
     def get_mlt_vals(self):
         return np.arange(-12 + .5 * self.lon_res * 24 / 360, 12 + 24 / 360, self.lon_res * 24 / 360)
 
+    def get_sample_dt(self):
+        return np.timedelta64(self.time_res_n, self.time_res_unit)
+
     def load_json(self, config_path):
         with open(config_path) as f:
             params = json.load(f)
+        if 'base_dir' in params:
+            params.update(**_get_default_directory_structure(params['base_dir']))
         self.load_dict(params)
 
     def load_dict(self, config_dict):
@@ -110,13 +133,26 @@ class Config:
         self.madrigal_user_email = config_dict.get('madrigal_user_email', self.madrigal_user_email)
         self.madrigal_user_affil = config_dict.get('madrigal_user_affil', self.madrigal_user_affil)
         self.nasa_spdf_download_method = config_dict.get('nasa_spdf_download_method', self.nasa_spdf_download_method)
+        self.lat_res = config_dict.get('lat_res', self.lat_res)
+        self.lon_res = config_dict.get('lon_res', self.lon_res)
+        self.time_res_unit = config_dict.get('time_res_unit', self.time_res_unit)
+        self.time_res_n = config_dict.get('time_res_n', self.time_res_n)
+        self.start_date = config_dict.get('start_date', self.start_date)
+        if isinstance(self.start_date, str):
+            self.start_date = parse_date(self.start_date)
+        self.end_date = config_dict.get('end_date', self.end_date)
+        if isinstance(self.end_date, str):
+            self.end_date = parse_date(self.end_date)
 
-    def save(self):
-        save_dict = self.__dict__.copy()
-        del save_dict['config_path']
-        save_dict['trough_id_params'] = self.trough_id_params.dict()
-        with open(self.config_path, 'w') as f:
+    def save(self, config_path=None):
+        if config_path is None:
+            config_path = Path(trough_dirs.user_config_dir) / self.get_config_name()
+        save_dict = self.dict().copy()
+        with open(config_path, 'w') as f:
             json.dump(save_dict, f)
+        cfg_pointer = Path(__name__).parent / "config_path.txt"
+        cfg_pointer.write_text(config_path)
+        print(f"Saved config and setting default: {config_path}")
 
     def set_base_dir(self, base_dir):
         data_dirs = _get_default_directory_structure(base_dir)
@@ -125,6 +161,8 @@ class Config:
     def dict(self):
         param_dict = self.__dict__.copy()
         param_dict['trough_id_params'] = self.trough_id_params.dict()
+        param_dict['start_date'] = param_dict['start_date'].strftime('%Y%m%d')
+        param_dict['end_date'] = param_dict['end_date'].strftime('%Y%m%d')
         return param_dict
 
     @contextlib.contextmanager

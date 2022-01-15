@@ -12,7 +12,7 @@ from apexpy import Apex
 from datetime import datetime, timedelta
 import logging
 
-import trough
+from trough import config, utils, _tec, _arb
 
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ def get_model(tec_data, omni_file):
     """
     omni_data = xr.open_dataset(omni_file)
     kp = _get_weighted_kp(tec_data.time, omni_data)
-    apex = Apex(date=trough.utils.datetime64_to_datetime(tec_data.time.values[0]))
+    apex = Apex(date=utils.datetime64_to_datetime(tec_data.time.values[0]))
     mlat = 65.5 * np.ones((tec_data.time.shape[0], tec_data.mlt.shape[0]))
     for i in range(10):
         glat, glon = apex.convert(mlat, tec_data.mlt.values[None, :], 'mlt', 'geo', 350, tec_data.time.values[:, None])
@@ -77,7 +77,7 @@ def estimate_background(tec, patch_shape):
     numpy.ndarray[float]
     """
     assert all([2 * (p // 2) + 1 == p for p in patch_shape]), "patch_shape must be all odd numbers"
-    patches = trough.utils.extract_patches(tec, patch_shape)
+    patches = utils.extract_patches(tec, patch_shape)
     return bn.nanmean(patches.reshape((tec.shape[0] - patch_shape[0] + 1,) + tec.shape[1:] + (-1,)), axis=-1)
 
 
@@ -211,10 +211,10 @@ def run_multiple(args, parallel=True):
 
 
 def label_trough_interval(start_date, end_date, params, tec_dir, arb_dir, omni_file):
-    data = trough.get_tec_data(start_date, end_date, tec_dir).to_dataset(name='tec')
+    data = _tec.get_tec_data(start_date, end_date, tec_dir).to_dataset(name='tec')
     preprocess_interval(data, bg_est_shape=params.bg_est_shape)
 
-    data['arb'] = trough.get_arb_data(start_date, end_date, arb_dir)
+    data['arb'] = _arb.get_arb_data(start_date, end_date, arb_dir)
     get_model(data, omni_file)
     args = get_optimization_args(data, params.model_weight_max, params.rbf_bw, params.tv_hw, params.tv_vw,
                                  params.l2_weight, params.tv_weight)
@@ -239,15 +239,15 @@ def label_trough_interval(start_date, end_date, params, tec_dir, arb_dir, omni_f
 def label_trough_dataset(start_date, end_date, params=None, tec_dir=None, arb_dir=None, omni_file=None,
                          output_dir=None):
     if params is None:
-        params = trough.config.trough_id_params
+        params = config.trough_id_params
     if tec_dir is None:
-        tec_dir = trough.config.processed_tec_dir
+        tec_dir = config.processed_tec_dir
     if arb_dir is None:
-        arb_dir = trough.config.processed_arb_dir
+        arb_dir = config.processed_arb_dir
     if omni_file is None:
-        omni_file = trough.config.processed_omni_file
+        omni_file = config.processed_omni_file
     if output_dir is None:
-        output_dir = trough.config.processed_labels_dir
+        output_dir = config.processed_labels_dir
 
     Path(output_dir).mkdir(exist_ok=True, parents=True)
     for year in range(start_date.year, end_date.year + 1):
@@ -265,3 +265,33 @@ def label_trough_dataset(start_date, end_date, params=None, tec_dir=None, arb_di
             start += timedelta(days=1)
         labels = xr.concat(labels, 'time')
         labels.to_netcdf(Path(output_dir) / f"labels_{year:04d}.nc")
+
+
+def get_label_paths(start_date, end_date, processed_dir):
+    file_dates = np.arange(
+        np.datetime64(start_date, 'Y'),
+        np.datetime64(end_date, 'Y') + 1,
+        np.timedelta64(1, 'Y')
+    )
+    file_dates = utils.decompose_datetime64(file_dates)
+    return [Path(processed_dir) / f"labels_{d[0]:04d}.nc" for d in file_dates]
+
+
+def get_trough_labels(start_date, end_date, labels_dir=None):
+    if labels_dir is None:
+        labels_dir = config.processed_labels_dir
+    data = xr.concat([xr.open_dataarray(file) for file in get_label_paths(start_date, end_date, labels_dir)], 'time')
+    return data.sel(time=slice(start_date, end_date))
+
+
+def get_data(start_date, end_date, tec_dir=None, omni_file=None, labels_dir=None):
+    if tec_dir is None:
+        tec_dir = config.processed_tec_dir
+    if omni_file is None:
+        omni_file = config.processed_omni_file
+    if labels_dir is None:
+        labels_dir = config.processed_labels_dir
+    tec_data = _tec.get_tec_data(start_date, end_date, tec_dir)
+    omni_data = xr.open_dataset(omni_file)
+    labels = get_trough_labels(start_date, end_date, labels_dir)
+    return xr.Dataset({'tec': tec_data, 'kp': omni_data['kp'], 'labels': labels})
