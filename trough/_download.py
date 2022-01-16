@@ -11,6 +11,7 @@ import re
 from madrigalWeb import madrigalWeb
 
 from trough.exceptions import InvalidConfiguration
+from trough._arb import _parse_arb_fn
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ class MadrigalTecDownloader(Downloader):
         return tec_files
 
 
-class NasaSpdfDownloader(Downloader, abc.ABC):
+class OmniDownloader(Downloader):
 
     def __init__(self, download_dir, method='ftp', *args, **kwargs):
         super().__init__(download_dir, *args, **kwargs)
@@ -111,16 +112,26 @@ class NasaSpdfDownloader(Downloader, abc.ABC):
     def _download_ftp_file(self, file, local_path):
         _download_ftp_file(self.server, file, local_path)
 
+    def _get_file_list(self, start_date, end_date):
+        new_start_date = start_date - timedelta(hours=3)
+        new_end_date = end_date + timedelta(hours=3)
+        files = [f'/pub/data/omni/low_res_omni/omni2_{year:4d}.dat'
+                 for year in range(new_start_date.year, new_end_date.year + 1)]
+        return files
 
-class ArbDownloader(NasaSpdfDownloader):
 
-    def __init__(self, download_dir, method='ftp', *args, **kwargs):
-        super().__init__(download_dir, method, *args, **kwargs)
-        self.satellites = ['dmspf16', 'dmspf17', 'dmspf18', 'dmspf19']
-        if method == 'ftp':
-            self.list_dir = self.server.nlst
-        elif method == 'http':
-            self.list_dir = self._list_dir_http
+class ArbDownloader(Downloader):
+
+    def __init__(self, download_dir, *args, **kwargs):
+        super().__init__(download_dir, *args, **kwargs)
+        self.satellites = ['f16', 'f17', 'f18', 'f19']
+
+    def _download_files(self, files):
+        logger.info(f"downloading {len(files)} files")
+        for file in files:
+            file_name = file.split('/')[-1]
+            local_path = self.download_dir / file_name
+            _download_http_file(file, local_path)
 
     def _get_file_list(self, start_date, end_date):
         start_date -= timedelta(hours=3)
@@ -128,40 +139,24 @@ class ArbDownloader(NasaSpdfDownloader):
         n_days = math.ceil((end_date - start_date) / timedelta(days=1))
         logger.info(f"getting files for {n_days} days")
         days = [start_date + timedelta(days=t) for t in range(n_days)]
+        dates = [d.date() for d in days]
         years = set([date.year for date in days])
         date_struct = {year: [_doy(date) for date in days if date.year == year] for year in years}
         files = []
 
         for satellite in self.satellites:
-            sat_years = [s + '/' if s[-1] != '/' else s for s in self.list_dir(f'/pub/data/dmsp/{satellite}/ssusi/data/edr-aurora/')]
             for year, doys in date_struct.items():
-                year_dir = f'/pub/data/dmsp/{satellite}/ssusi/data/edr-aurora/{year}/'
-                if year_dir in sat_years:
-                    sat_doys = [s + '/' if s[-1] != '/' else s for s in self.list_dir(year_dir)]
-                    for doy in doys:
-                        doy_dir = f'/pub/data/dmsp/{satellite}/ssusi/data/edr-aurora/{year}/{doy:03d}/'
-                        if doy_dir in sat_doys:
-                            files += self.list_dir(doy_dir)
-        return files
-
-    @staticmethod
-    def _list_dir_http(path):
-        url = "https://spdf.gsfc.nasa.gov" + path
-        with request.urlopen(url) as r:
-            soup = bs4.BeautifulSoup(r.read(), 'html.parser')
-            links = soup.find_all('a')
-        dirs = [path + link.attrs['href'] for link in links if re.match('\d+', link.string)]
-        files = [path + link.attrs['href'] for link in links if re.match('dmspf.+.nc', link.string)]
-        return dirs + files
-
-
-class OmniDownloader(NasaSpdfDownloader):
-
-    def _get_file_list(self, start_date, end_date):
-        new_start_date = start_date - timedelta(hours=3)
-        new_end_date = end_date + timedelta(hours=3)
-        files = [f'/pub/data/omni/low_res_omni/omni2_{year:4d}.dat'
-                 for year in range(new_start_date.year, new_end_date.year + 1)]
+                for doy in doys:
+                    url = f'https://ssusi.jhuapl.edu/data_retriver?spc={satellite}&type=edr-aur&year={year:04d}&Doy={doy:03d}'
+                    with request.urlopen(url) as r:
+                        if r.status == 200:
+                            soup = bs4.BeautifulSoup(r.read(), 'html.parser')
+                            links = soup.find_all('a')
+                            for link in links:
+                                if 'href' in link.attrs and re.match('PS\.APL_.+EDR-AURORA.+\.NC', str(link.string)):
+                                    sat_name, date = _parse_arb_fn(pathlib.Path(link['href']))
+                                    if date.date() in dates and sat_name.lower() == satellite:
+                                        files.append(f"https://ssusi.jhuapl.edu/{link['href']}")
         return files
 
 

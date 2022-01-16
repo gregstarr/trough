@@ -150,7 +150,7 @@ class Config:
         save_dict = self.dict().copy()
         with open(config_path, 'w') as f:
             json.dump(save_dict, f)
-        cfg_pointer = Path(__name__).parent / "config_path.txt"
+        cfg_pointer = Path(__file__).parent / "config_path.txt"
         cfg_pointer.write_text(config_path)
         print(f"Saved config and setting default: {config_path}")
 
@@ -161,8 +161,10 @@ class Config:
     def dict(self):
         param_dict = self.__dict__.copy()
         param_dict['trough_id_params'] = self.trough_id_params.dict()
-        param_dict['start_date'] = param_dict['start_date'].strftime('%Y%m%d')
-        param_dict['end_date'] = param_dict['end_date'].strftime('%Y%m%d')
+        if param_dict['start_date'] is not None:
+            param_dict['start_date'] = param_dict['start_date'].strftime('%Y%m%d')
+        if param_dict['end_date'] is not None:
+            param_dict['end_date'] = param_dict['end_date'].strftime('%Y%m%d')
         return param_dict
 
     @contextlib.contextmanager

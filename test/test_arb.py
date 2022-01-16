@@ -12,19 +12,6 @@ from trough._download import ArbDownloader
 from trough.exceptions import InvalidProcessDates
 
 
-def test_download_arb_ftp(skip_ftp, test_dates):
-    if skip_ftp:
-        pytest.skip("Skipping because 'skip_ftp' set to True")
-    with TemporaryDirectory() as tempdir:
-        downloader = ArbDownloader(tempdir, 'ftp')
-        downloader.download(*test_dates)
-        arb_files = list(Path(tempdir).glob('*'))
-        assert len(arb_files) > 0
-        data, times = _get_downloaded_arb_data(*test_dates, tempdir)
-        assert min(times) < test_dates[0]
-        assert max(times) > test_dates[-1]
-
-
 @pytest.fixture(scope='module')
 def download_dir():
     with TemporaryDirectory() as t:
@@ -37,8 +24,8 @@ def processed_dir():
         yield t
 
 
-def test_download_arb_http(test_dates, download_dir):
-    downloader = ArbDownloader(download_dir, 'http')
+def test_download_arb(test_dates, download_dir):
+    downloader = ArbDownloader(download_dir)
     downloader.download(*test_dates)
     arb_files = list(Path(download_dir).glob('*'))
     assert len(arb_files) > 0

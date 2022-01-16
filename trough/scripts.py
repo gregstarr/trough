@@ -18,7 +18,7 @@ def download_tec(start_date, end_date):
 
 def download_arb(start_date, end_date):
     logger.info(f"running 'download_arb', start date: {start_date}, end date: {end_date}")
-    downloader = _download.ArbDownloader(config.download_arb_dir, config.nasa_spdf_download_method)
+    downloader = _download.ArbDownloader(config.download_arb_dir)
     downloader.download(start_date, end_date)
     logger.info("'download_arb' completed")
 

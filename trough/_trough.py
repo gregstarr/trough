@@ -294,4 +294,8 @@ def get_data(start_date, end_date, tec_dir=None, omni_file=None, labels_dir=None
     tec_data = _tec.get_tec_data(start_date, end_date, tec_dir)
     omni_data = xr.open_dataset(omni_file)
     labels = get_trough_labels(start_date, end_date, labels_dir)
-    return xr.Dataset({'tec': tec_data, 'kp': omni_data['kp'], 'labels': labels})
+    return xr.Dataset({
+        'tec': tec_data,
+        'kp': omni_data['kp'].sel(time=slice(start_date, end_date)),
+        'labels': labels
+    })

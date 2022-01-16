@@ -33,10 +33,9 @@ def get_arb_data(start_date, end_date, processed_dir=None):
 
 
 def _parse_arb_fn(path):
-    sat_name = path.name[:7]
-    date1 = datetime.strptime(path.name[25:39], "%Y%jT%H%M%S")
-    date2 = datetime.strptime(path.name[40:54], "%Y%jT%H%M%S")
-    return sat_name, date1, date2
+    sat_name = path.name[36:39]
+    date = datetime.strptime(path.name[67:75], "%Y%m%d")
+    return sat_name, date
 
 
 def _get_downloaded_arb_data(start_date, end_date, input_dir):
@@ -45,7 +44,8 @@ def _get_downloaded_arb_data(start_date, end_date, input_dir):
     data = {field: [] for field in _arb_fields}
     data['sat'] = []
     for path in Path(input_dir).glob('*.nc'):
-        sat_name, date1, date2 = _parse_arb_fn(path)
+        sat_name, date1 = _parse_arb_fn(path)
+        date2 = date1 + timedelta(days=1)
         if start_date > date2 or end_date < date1:
             continue
         data['sat'].append(sat_name)
