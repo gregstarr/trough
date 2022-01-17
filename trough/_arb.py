@@ -43,7 +43,7 @@ def _get_downloaded_arb_data(start_date, end_date, input_dir):
     end_date += timedelta(hours=3)
     data = {field: [] for field in _arb_fields}
     data['sat'] = []
-    for path in Path(input_dir).glob('*.nc'):
+    for path in Path(input_dir).glob('*.NC'):
         sat_name, date1 = _parse_arb_fn(path)
         date2 = date1 + timedelta(days=1)
         if start_date > date2 or end_date < date1:
