@@ -122,7 +122,9 @@ def process_interval(start_date, end_date, output_fn, input_dir, sample_dt, mlat
     logger.info(f"processing tec data for {start_date, end_date}")
     calc_bins = functools.partial(calculate_bins, mlat_bins=mlat_bins, mlt_bins=mlt_bins)
     ref_times = np.arange(np.datetime64(start_date, 's'), np.datetime64(end_date, 's'), sample_dt)
+    logger.info(f"ref times: {ref_times.shape}, {ref_times[0]=}, {ref_times[-1]=}")
     mad_data = _get_downloaded_tec_data(start_date, end_date, input_dir)
+    logger.info(f"got mad data: {mad_data.shape=}, {mad_data.time.values[0]=}, {mad_data.time.values[-1]=}")
     if mad_data.shape == () or min(mad_data.time.values) > ref_times[0] or max(mad_data.time.values) < ref_times[-1]:
         logger.error(f"mad_data shape: {mad_data.shape}")
         if mad_data.shape != ():
@@ -130,11 +132,11 @@ def process_interval(start_date, end_date, output_fn, input_dir, sample_dt, mlat
         raise InvalidProcessDates(f"Need to download full data range before processing")
     mad_data = mad_data.sel(time=slice(ref_times[0], ref_times[-1] + sample_dt))
 
-    logger.info("Converting coordinates")
+    logger.info(f"Converting coordinates, {mad_data.time.values[0]=}, {mad_data.time.values[-1]=}")
     apex = Apex(date=start_date)
     mad_data = get_mag_coords(apex, mad_data)
 
-    logger.info("Setting up for binning")
+    logger.info(f"Setting up for binning, {mad_data.time.values[0]=}, {mad_data.time.values[-1]=}")
     time_bins = np.arange(mad_data.time.values[0], mad_data.time.values[-1] + sample_dt, sample_dt)
     data_groups = mad_data.groupby_bins('time', bins=time_bins, right=False)
     data = [_data for _interval, _data in data_groups]
