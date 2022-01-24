@@ -74,6 +74,24 @@ def label_trough(start_date, end_date):
     _trough.label_trough_dataset(start_date, end_date)
 
 
+def _tec_interval_check(start, end):
+    tec_file_names = _tec.get_tec_paths(start, end, config.processed_tec_dir)
+    for file in tec_file_names:
+        needs_processing = _tec.check_processed_data_interval(start, end, file)
+        if needs_processing:
+            return True
+    return False
+
+
+def _arb_interval_check(start, end):
+    arb_file_names = _arb.get_arb_paths(start, end, config.processed_arb_dir)
+    for file in arb_file_names:
+        needs_processing = _arb.check_processed_data_interval(start, end, file)
+        if needs_processing:
+            return True
+    return False
+
+
 def full_run(start_date, end_date):
     logger.info(f"running 'full_run'")
     for year in range(start_date.year, end_date.year + 1):
@@ -81,10 +99,13 @@ def full_run(start_date, end_date):
         end = min(end_date, datetime(year + 1, 1, 1))
         if end - start <= timedelta(hours=1):
             continue
-        download_tec(start, end)
-        process_tec(start, end)
-        download_arb(start, end)
-        process_arb(start, end)
+
+        if _tec_interval_check(start, end):
+            download_tec(start, end)
+            process_tec(start, end)
+        if _arb_interval_check(start, end):
+            download_arb(start, end)
+            process_arb(start, end)
 
     download_omni(start_date, end_date)
     process_omni(start_date, end_date)

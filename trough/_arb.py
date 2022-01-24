@@ -87,6 +87,20 @@ def process_interval(start_date, end_date, output_fn, input_dir, mlt_vals, sampl
     data.to_netcdf(output_fn)
 
 
+def check_processed_data_interval(start, end, processed_file):
+    if processed_file.exists():
+        logger.info(f"processed file already exists {processed_file=}, checking...")
+        try:
+            data_check = get_arb_data(start, end, processed_file.parent)
+            if not data_check.isnull().all(dim=['mlt']).any().item():
+                logger.info(f"downloaded data already processed {processed_file=}, checking...")
+                return False
+        except Exception as e:
+            logger.info(f"error reading processed file {processed_file=}: {e}, removing and reprocessing")
+            processed_file.unlink()
+    return True
+
+
 def process_auroral_boundary_dataset(start_date, end_date, download_dir=None, process_dir=None, mlt_vals=None, dt=None):
     if download_dir is None:
         download_dir = config.download_arb_dir
@@ -104,4 +118,5 @@ def process_auroral_boundary_dataset(start_date, end_date, download_dir=None, pr
         end = min(end_date, datetime(year + 1, 1, 1))
         if end - start <= timedelta(hours=1):
             continue
-        process_interval(start, end, output_file, download_dir, mlt_vals, dt)
+        if check_processed_data_interval(start, end, output_file):
+            process_interval(start, end, output_file, download_dir, mlt_vals, dt)

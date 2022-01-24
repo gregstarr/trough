@@ -2,7 +2,6 @@ import numpy as np
 import xarray as xr
 from apexpy import Apex
 from scipy.stats import binned_statistic_2d
-from multiprocessing import Pool
 from pathlib import Path
 import h5py
 import logging
@@ -124,12 +123,12 @@ def process_interval(start_date, end_date, output_fn, input_dir, sample_dt, mlat
     ref_times = np.arange(np.datetime64(start_date, 's'), np.datetime64(end_date, 's'), sample_dt)
     logger.info(f"ref times: {ref_times.shape}, {ref_times[0]=}, {ref_times[-1]=}")
     mad_data = _get_downloaded_tec_data(start_date, end_date, input_dir)
-    logger.info(f"got mad data: {mad_data.shape=}, {mad_data.time.values[0]=}, {mad_data.time.values[-1]=}")
     if mad_data.shape == () or min(mad_data.time.values) > ref_times[0] or max(mad_data.time.values) < ref_times[-1]:
         logger.error(f"mad_data shape: {mad_data.shape}")
         if mad_data.shape != ():
             logger.error(f"times: {min(mad_data.time.values)} - {max(mad_data.time.values)}")
         raise InvalidProcessDates(f"Need to download full data range before processing")
+    logger.info(f"got mad data: {mad_data.shape=}, {mad_data.time.values[0]=}, {mad_data.time.values[-1]=}")
     mad_data = mad_data.sel(time=slice(ref_times[0], ref_times[-1] + sample_dt))
 
     logger.info(f"Converting coordinates, {mad_data.time.values[0]=}, {mad_data.time.values[-1]=}")
@@ -151,6 +150,20 @@ def process_interval(start_date, end_date, output_fn, input_dir, sample_dt, mlat
         dims=['time', 'mlat', 'mlt']
     )
     tec.to_netcdf(output_fn)
+
+
+def check_processed_data_interval(start, end, processed_file):
+    if processed_file.exists():
+        logger.info(f"processed file already exists {processed_file=}, checking...")
+        try:
+            data_check = get_tec_data(start, end, processed_file.parent)
+            if not data_check.isnull().all(dim=['mlt', 'mlat']).any().item():
+                logger.info(f"downloaded data already processed {processed_file=}, checking...")
+                return False
+        except Exception as e:
+            logger.info(f"error reading processed file {processed_file=}: {e}, removing and reprocessing")
+            processed_file.unlink()
+    return True
 
 
 def process_tec_dataset(start_date, end_date, download_dir=None, process_dir=None, dt=None, mlat_bins=None,
@@ -176,4 +189,5 @@ def process_tec_dataset(start_date, end_date, download_dir=None, process_dir=Non
                 continue
             start = max(start_date, start)
             end = min(end_date, end)
-            process_interval(start, end, output_file, download_dir, dt, mlat_bins, mlt_bins)
+            if check_processed_data_interval(start, end, output_file):
+                process_interval(start, end, output_file, download_dir, dt, mlat_bins, mlt_bins)
