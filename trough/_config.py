@@ -89,6 +89,8 @@ class Config:
         self.start_date = None
         self.end_date = None
 
+        self.keep_download = False
+
         if config_path is not None:
             self.load_json(config_path)
 
@@ -143,15 +145,18 @@ class Config:
         self.end_date = config_dict.get('end_date', self.end_date)
         if isinstance(self.end_date, str):
             self.end_date = parse_date(self.end_date)
+        self.script_name = config_dict.get('script_name', self.script_name)
+        self.keep_download = config_dict.get('keep_download', self.keep_download)
 
     def save(self, config_path=None):
         if config_path is None:
             config_path = Path(trough_dirs.user_config_dir) / self.get_config_name()
         save_dict = self.dict().copy()
+        Path(config_path).parent.mkdir(exist_ok=True, parents=True)
         with open(config_path, 'w') as f:
             json.dump(save_dict, f)
         cfg_pointer = Path(__file__).parent / "config_path.txt"
-        cfg_pointer.write_text(config_path)
+        cfg_pointer.write_text(str(config_path))
         print(f"Saved config and setting default: {config_path}")
 
     def set_base_dir(self, base_dir):

@@ -5,6 +5,7 @@ import xarray as xr
 import pytest
 import itertools
 from datetime import datetime, timedelta
+import json
 
 from trough import config, scripts
 from trough._tec import process_interval, get_tec_data, _get_downloaded_tec_data, get_tec_paths, calculate_bins
@@ -38,6 +39,32 @@ def test_calculate_bins():
     assert out_tec[0, 1] == 20 / 25
     assert out_tec[1, 0] == 30 / 25
     assert out_tec[1, 1] == 0
+
+
+def test_file_list():
+    start_date = datetime(2001, 1, 1, 12, 0, 0)
+    end_date = datetime(2001, 1, 2, 12, 0, 0)
+    with TemporaryDirectory() as tempdir:
+        cache_fn = Path(tempdir) / "file_list.json"
+        cache = {'100139613': 'file_1', '100139351': 'file_2'}
+        with open(cache_fn, 'w') as f:
+                json.dump(cache, f)
+        downloader = MadrigalTecDownloader(tempdir, 'gstarr', 'gstarr@bu.edu', 'bu')
+        download_dict = downloader._get_file_list(start_date, end_date)
+        assert cache == download_dict
+
+
+def test_verify_download():
+    with TemporaryDirectory() as tempdir:
+        server_files = ["/opt/cedar3/experiments3/2009/gps/31dec09/gps091231g.001.hdf5"]
+        downloader = MadrigalTecDownloader(tempdir, 'gstarr', 'gstarr@bu.edu', 'bu')
+        local_files = downloader._download_files(server_files)
+        bad_server_files = downloader._verify_files(local_files, server_files)
+        assert len(bad_server_files) == 0
+        with open(local_files[0], 'rb+') as f:
+            f.write('random extra stuff'.encode())
+        bad_server_files = downloader._verify_files(local_files, server_files)
+        assert bad_server_files == server_files
 
 
 @pytest.fixture(scope='module')

@@ -1,3 +1,4 @@
+import pathlib
 from tempfile import TemporaryDirectory
 from pathlib import Path
 import xarray as xr
@@ -5,11 +6,42 @@ import numpy as np
 import pytest
 import itertools
 from datetime import datetime, timedelta
+import json
 
 from trough import config, scripts
 from trough._arb import process_interval, get_arb_data, get_arb_paths, _get_downloaded_arb_data
 from trough._download import ArbDownloader
 from trough.exceptions import InvalidProcessDates
+
+
+def test_file_list():
+    start_date = datetime(2001, 1, 1, 12, 0, 0)
+    end_date = datetime(2001, 1, 2, 12, 0, 0)
+    with TemporaryDirectory() as tempdir:
+        cache_fn = Path(tempdir) / "file_list.json"
+        cache = {}
+        for sat in ['f16', 'f17', 'f18', 'f19']:
+            for doy in [1, 2]:
+                cache_key = f"{sat}_{2001}_{doy}"
+                cache[cache_key] = [f'{cache_key}_file_1', f'{cache_key}_file_2']
+                with open(cache_fn, 'w') as f:
+                    json.dump(cache, f)
+        downloader = ArbDownloader(tempdir)
+        download_dict = downloader._get_file_list(start_date, end_date)
+        assert cache == download_dict
+
+
+def test_verify_download():
+    with TemporaryDirectory() as tempdir:
+        server_files = ["https://ssusi.jhuapl.edu/dataN/f16/apl/edr-aur//2009/365//PS.APL_V0105S027CE0019_SC.U_DI.A_GP.F16-SSUSI_PA.APL-EDR-AURORA_DD.20091231_SN.32013-00_DF.NC"]
+        downloader = ArbDownloader(tempdir)
+        local_files = downloader._download_files(server_files)
+        bad_server_files = downloader._verify_files(local_files, server_files)
+        assert len(bad_server_files) == 0
+        with open(local_files[0], 'rb+') as f:
+            f.write('random extra stuff'.encode())
+        bad_server_files = downloader._verify_files(local_files, server_files)
+        assert bad_server_files == server_files
 
 
 @pytest.fixture(scope='module')

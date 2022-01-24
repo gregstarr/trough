@@ -31,7 +31,7 @@ def _get_downloaded_tec_data(start_date, end_date, input_dir):
         if start_date > date2 or end_date < date1:
             continue
         data.append(open_madrigal_file(path))
-        logger.info(f"arb file: {path}, info: [{date1}, {date2}], tec size: {data[-1].shape}")
+        logger.info(f"tec file: {path}, info: [{date1}, {date2}], tec size: {data[-1].shape}")
     if len(data) == 0:
         return xr.DataArray()
     return xr.concat(data, 'time')
@@ -167,11 +167,11 @@ def process_tec_dataset(start_date, end_date, download_dir=None, process_dir=Non
 
     for year in range(start_date.year, end_date.year + 1):
         for month in range(1, 13):
+            output_file = Path(process_dir) / f"tec_{year:04d}_{month:02d}.nc"
             start = datetime(year, month, 1)
             end = datetime(year, month + 1, 1) if month < 12 else datetime(year + 1, 1, 1)
-            if start > end_date or end < start_date:
+            if start >= end_date or end <= start_date:
                 continue
             start = max(start_date, start)
             end = min(end_date, end)
-            process_interval(start, end, Path(process_dir) / f"tec_{year:04d}_{month:02d}.nc", download_dir, dt,
-                             mlat_bins, mlt_bins)
+            process_interval(start, end, output_file, download_dir, dt, mlat_bins, mlt_bins)

@@ -111,3 +111,7 @@ dl/cp
 
 # config pointer file
 config_path.txt
+
+# stray config files
+cfg.json
+config.json

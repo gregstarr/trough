@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from datetime import datetime, timedelta
 
 from trough import config
 from trough import _download, _tec, _arb, _omni, _trough
@@ -39,14 +40,24 @@ def download_all(start_date, end_date):
 def process_tec(start_date, end_date):
     logger.info(f"running 'process_tec'")
     _tec.process_tec_dataset(start_date, end_date)
+    if not config.keep_download:
+        for path in Path(config.download_tec_dir).glob("*.hdf5"):
+            date = _tec._parse_madrigal_fn(path)
+            if start_date <= date <= end_date:
+                path.unlink()
 
 
 def process_arb(start_date, end_date):
     logger.info(f"running 'process_arb'")
     _arb.process_auroral_boundary_dataset(start_date, end_date)
+    if not config.keep_download:
+        for path in Path(config.download_arb_dir).glob("*.NC"):
+            sat_name, date = _arb._parse_arb_fn(path)
+            if start_date <= date <= end_date:
+                path.unlink()
 
 
-def process_omni():
+def process_omni(start_date, end_date):
     logger.info(f"running 'process_omni'")
     _omni.process_omni_dataset(config.download_omni_dir, Path(config.processed_omni_file))
 
@@ -55,7 +66,7 @@ def process_all(start_date, end_date):
     logger.info(f"running 'process_all'")
     process_tec(start_date, end_date)
     process_arb(start_date, end_date)
-    process_omni()
+    process_omni(start_date, end_date)
 
 
 def label_trough(start_date, end_date):
@@ -65,6 +76,17 @@ def label_trough(start_date, end_date):
 
 def full_run(start_date, end_date):
     logger.info(f"running 'full_run'")
-    download_all(start_date, end_date)
-    process_all(start_date, end_date)
+    for year in range(start_date.year, end_date.year + 1):
+        start = max(start_date, datetime(year, 1, 1))
+        end = min(end_date, datetime(year + 1, 1, 1))
+        if end - start <= timedelta(hours=1):
+            continue
+        download_tec(start, end)
+        process_tec(start, end)
+        download_arb(start, end)
+        process_arb(start, end)
+
+    download_omni(start_date, end_date)
+    process_omni(start_date, end_date)
+
     label_trough(start_date, end_date)

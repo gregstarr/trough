@@ -211,6 +211,7 @@ def run_multiple(args, parallel=True):
 
 
 def label_trough_interval(start_date, end_date, params, tec_dir, arb_dir, omni_file):
+    logger.info(f"labeling trough interval: {start_date=} {end_date=}")
     data = _tec.get_tec_data(start_date, end_date, tec_dir).to_dataset(name='tec')
     preprocess_interval(data, bg_est_shape=params.bg_est_shape)
 
@@ -219,7 +220,7 @@ def label_trough_interval(start_date, end_date, params, tec_dir, arb_dir, omni_f
     args = get_optimization_args(data, params.model_weight_max, params.rbf_bw, params.tv_hw, params.tv_vw,
                                  params.l2_weight, params.tv_weight)
     logger.info("Running inversion optimization")
-    data['model_output'] = xr.DataArray(
+    data['score'] = xr.DataArray(
         run_multiple(args).reshape((data.time.shape[0], data.mlat.shape[0], data.mlt.shape[0])),
         coords={
             'time': data.time,
@@ -229,7 +230,7 @@ def label_trough_interval(start_date, end_date, params, tec_dir, arb_dir, omni_f
         dims=['time', 'mlat', 'mlt']
     )
     # threshold
-    data['labels'] = data['model_output'] >= params.threshold
+    data['labels'] = data['score'] >= params.threshold
     # postprocess
     logger.info("Postprocessing inversion results")
     postprocess(data, params.perimeter_th, params.area_th, params.closing_rad)
@@ -252,19 +253,23 @@ def label_trough_dataset(start_date, end_date, params=None, tec_dir=None, arb_di
     Path(output_dir).mkdir(exist_ok=True, parents=True)
     for year in range(start_date.year, end_date.year + 1):
         labels = []
+        scores = []
         start = datetime(year, 1, 1, 0, 0)
         while start.year < year + 1:
             end = start + timedelta(days=1)
-            if start > end_date or end < start_date:
+            if start >= end_date or end <= start_date:
                 start += timedelta(days=1)
                 continue
             start = max(start_date, start)
             end = min(end_date, end)
             data = label_trough_interval(start, end, params, tec_dir, arb_dir, omni_file)
             labels.append(data['labels'])
+            scores.append(data['score'])
             start += timedelta(days=1)
         labels = xr.concat(labels, 'time')
+        scores = xr.concat(scores, 'time')
         labels.to_netcdf(Path(output_dir) / f"labels_{year:04d}.nc")
+        scores.to_netcdf(Path(output_dir) / f"scores_{year:04d}.nc")
 
 
 def get_label_paths(start_date, end_date, processed_dir):
@@ -291,11 +296,7 @@ def get_data(start_date, end_date, tec_dir=None, omni_file=None, labels_dir=None
         omni_file = config.processed_omni_file
     if labels_dir is None:
         labels_dir = config.processed_labels_dir
-    tec_data = _tec.get_tec_data(start_date, end_date, tec_dir)
-    omni_data = xr.open_dataset(omni_file)
-    labels = get_trough_labels(start_date, end_date, labels_dir)
-    return xr.Dataset({
-        'tec': tec_data,
-        'kp': omni_data['kp'].sel(time=slice(start_date, end_date)),
-        'labels': labels
-    })
+    data = xr.open_dataset(omni_file).sel(time=slice(start_date, end_date))
+    data['tec'] = _tec.get_tec_data(start_date, end_date, tec_dir)
+    data['labels'] = get_trough_labels(start_date, end_date, labels_dir)
+    return data

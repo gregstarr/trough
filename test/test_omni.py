@@ -8,13 +8,26 @@ from trough._omni import open_downloaded_omni_file, process_omni_dataset
 from trough._download import OmniDownloader
 
 
+def test_verify_download():
+    with TemporaryDirectory() as tempdir:
+        server_files = ["/pub/data/omni/low_res_omni/omni2_2009.dat"]
+        downloader = OmniDownloader(tempdir)
+        local_files = downloader._download_files(server_files)
+        bad_server_files = downloader._verify_files(local_files, server_files)
+        assert len(bad_server_files) == 0
+        with open(local_files[0], 'w') as f:
+            f.write('random')
+        bad_server_files = downloader._verify_files(local_files, server_files)
+        assert bad_server_files == server_files
+
+
 def test_download_omni_ftp(skip_ftp, test_dates):
     if skip_ftp:
         pytest.skip("Skipping because 'skip_ftp' set to True")
     with TemporaryDirectory() as tempdir:
         downloader = OmniDownloader(tempdir, 'ftp')
         downloader.download(*test_dates)
-        omni_files = list(Path(tempdir).glob('*'))
+        omni_files = list(Path(tempdir).glob('*.dat'))
         assert len(omni_files) > 0
         data = []
         for file in omni_files:
@@ -32,7 +45,7 @@ def tempdir():
 def test_download_omni_http(test_dates, tempdir):
     downloader = OmniDownloader(tempdir, 'http')
     downloader.download(*test_dates)
-    omni_files = list(Path(tempdir).glob('*'))
+    omni_files = list(Path(tempdir).glob('*.dat'))
     assert len(omni_files) > 0
     data = []
     for file in omni_files:

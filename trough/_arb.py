@@ -49,7 +49,7 @@ def _get_downloaded_arb_data(start_date, end_date, input_dir):
         if start_date > date2 or end_date < date1:
             continue
         data['sat'].append(sat_name)
-        with h5py.File(path) as f:
+        with h5py.File(path, 'r') as f:
             for field in _arb_fields:
                 data[field].append(f[field][()])
         logger.info(f"arb file: {path}, info: [{sat_name}, {date1}, {date2}], n_pts: {len(data['ALTITUDE'][-1])}")
@@ -70,7 +70,6 @@ def process_interval(start_date, end_date, output_fn, input_dir, mlt_vals, sampl
         if len(times) > 0:
             logger.error(f"times: {min(times)} - {max(times)}")
         raise InvalidProcessDates(f"Need to download full data range before processing")
-    assert times.shape == np.unique(times).shape, "Non unique times, time to fix"
     logger.info(f"{times.shape[0]} time points")
     sort_idx = np.argsort(times)
     times = times[sort_idx]
@@ -100,6 +99,9 @@ def process_auroral_boundary_dataset(start_date, end_date, download_dir=None, pr
     Path(process_dir).mkdir(exist_ok=True, parents=True)
 
     for year in range(start_date.year, end_date.year + 1):
+        output_file = Path(process_dir) / f"arb_{year:04d}.nc"
         start = max(start_date, datetime(year, 1, 1))
         end = min(end_date, datetime(year + 1, 1, 1))
-        process_interval(start, end, Path(process_dir) / f"arb_{year:04d}.nc", download_dir, mlt_vals, dt)
+        if end - start <= timedelta(hours=1):
+            continue
+        process_interval(start, end, output_file, download_dir, mlt_vals, dt)

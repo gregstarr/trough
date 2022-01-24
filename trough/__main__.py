@@ -1,6 +1,7 @@
 import argparse
 from datetime import datetime
 import logging
+from sys import stdout
 
 import trough
 
@@ -15,8 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 def setup(args):
-    logging.basicConfig(format='%(asctime)-15s %(name)-20s %(levelname)-8s %(message)s', datefmt='%Y%m%d_%H%M%S',
-                        level=logging.INFO)
+    stream_handler = logging.StreamHandler(stdout)
+    file_handler = logging.FileHandler('log_output.log', mode='w')
+    logging.basicConfig(format='%(asctime)-19s %(name)-20s %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
+                        level=logging.INFO, handlers=[stream_handler, file_handler])
     trough.config.load_json(args.config)
     trough.config.save(args.config_save)
 
@@ -26,8 +29,8 @@ def main():
     parser.add_argument("config", type=str, help="config file input")
     parser.add_argument("--config-save", type=str, help="config file save file")
     args = parser.parse_args()
-    script_fun = getattr(trough.scripts, trough.config.script_name)
     setup(args)
+    script_fun = getattr(trough.scripts, trough.config.script_name)
     script_fun(trough.config.start_date, trough.config.end_date)
 
 
