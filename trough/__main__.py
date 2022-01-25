@@ -1,5 +1,4 @@
 import argparse
-from datetime import datetime
 import logging
 from sys import stdout
 

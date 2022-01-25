@@ -1,7 +1,11 @@
 import numpy as np
 import datetime
-import h5py
-from skimage.util import view_as_windows
+import warnings
+try:
+    import h5py
+    from skimage.util import view_as_windows
+except ImportError as e:
+    warnings.warn("Packages required for recreating dataset not installed")
 
 
 def datetime64_to_datetime(dt64):

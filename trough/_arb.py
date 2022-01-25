@@ -1,4 +1,3 @@
-import h5py
 import xarray as xr
 import numpy as np
 from pathlib import Path
@@ -6,6 +5,11 @@ from datetime import datetime, timedelta
 from apexpy import Apex
 from scipy.interpolate import interp1d
 import logging
+import warnings
+try:
+    import h5py
+except ImportError as e:
+    warnings.warn("Packages required for recreating dataset not installed")
 
 from trough import config, utils
 from trough.exceptions import InvalidProcessDates

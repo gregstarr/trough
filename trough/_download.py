@@ -1,18 +1,23 @@
+import numpy as np
 from datetime import datetime, timedelta
 import math
 import pathlib
 import socket
-import logging
 import abc
 import ftplib
 from urllib import request
-import bs4
 import re
-from madrigalWeb import madrigalWeb
 import json
 import functools
-import h5py
-import numpy as np
+import logging
+import warnings
+try:
+    import h5py
+    from madrigalWeb import madrigalWeb
+    import bs4
+except ImportError as e:
+    warnings.warn("Packages required for recreating dataset not installed")
+
 
 from trough.exceptions import InvalidConfiguration
 from trough._arb import _parse_arb_fn

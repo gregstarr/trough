@@ -1,16 +1,20 @@
 import numpy as np
 import xarray as xr
-import bottleneck as bn
-import pandas
-from skimage import measure, morphology
-from sklearn.metrics.pairwise import rbf_kernel
-import cvxpy as cp
 import multiprocessing
 from scipy.sparse import csr_matrix
 from pathlib import Path
 from apexpy import Apex
 from datetime import datetime, timedelta
 import logging
+import warnings
+try:
+    import cvxpy as cp
+    import bottleneck as bn
+    import pandas
+    from skimage import measure, morphology
+    from sklearn.metrics.pairwise import rbf_kernel
+except ImportError as e:
+    warnings.warn("Packages required for recreating dataset not installed")
 
 from trough import config, utils, _tec, _arb
 

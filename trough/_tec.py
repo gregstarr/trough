@@ -3,10 +3,14 @@ import xarray as xr
 from apexpy import Apex
 from scipy.stats import binned_statistic_2d
 from pathlib import Path
-import h5py
 import logging
 import functools
 from datetime import datetime, timedelta
+import warnings
+try:
+    import h5py
+except ImportError as e:
+    warnings.warn("Packages required for recreating dataset not installed")
 
 from trough import config, utils
 from trough.exceptions import InvalidProcessDates
