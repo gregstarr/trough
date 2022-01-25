@@ -20,7 +20,6 @@ def setup(args):
     logging.basicConfig(format='%(asctime)-19s %(name)-20s %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                         level=logging.INFO, handlers=[stream_handler, file_handler])
     trough.config.load_json(args.config)
-    trough.config.save(args.config_save)
 
 
 def main():
@@ -31,6 +30,7 @@ def main():
     setup(args)
     script_fun = getattr(trough.scripts, trough.config.script_name)
     script_fun(trough.config.start_date, trough.config.end_date)
+    trough.config.save(args.config_save)
 
 
 if __name__ == "__main__":

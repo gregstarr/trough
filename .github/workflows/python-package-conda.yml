@@ -18,7 +18,7 @@ jobs:
         echo $CONDA/bin >> $GITHUB_PATH
     - run: |
         conda env create --file environment.yml --name test python=${{ matrix.python-version }}
-        conda activate test
+        source activate test
         pip install apexpy
         pip install --upgrade numpy
     - name: Lint with flake8
