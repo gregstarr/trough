@@ -33,7 +33,7 @@ def _get_downloaded_tec_data(start_date, end_date, input_dir):
         logger.info(f"tec file: {path}, info: [{date1}, {date2}], tec size: {data[-1].shape}")
     if len(data) == 0:
         return xr.DataArray()
-    return xr.concat(data, 'time')
+    return xr.concat(sorted(data, key=lambda x: min(x.time.values)), 'time')
 
 
 def open_madrigal_file(fn):
