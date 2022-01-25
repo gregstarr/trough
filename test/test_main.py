@@ -35,10 +35,18 @@ def test_default_main(preserve_config_pointer):
         try:
             proc1 = subprocess.run(['python', '-m', 'trough', str(input_config_path.absolute()), '--config-save',
                                     str(output_config_path.absolute())], capture_output=True)
+            print("###### PROC 1 #######")
+            print(proc1.returncode)
             print(proc1.stdout)
+            print(proc1.stderr)
+            print()
             subtest_fn = Path(__file__).parent / "subtest.py"
             proc2 = subprocess.run(['python', str(subtest_fn.absolute())], capture_output=True)
+            print("###### PROC 2 #######")
+            print(proc2.returncode)
             print(proc2.stdout)
+            print(proc2.stderr)
+            print()
             outputs = [s.decode() for s in proc2.stdout.splitlines()]
             assert outputs[0] == '(28, 60, 180)'
             assert outputs[1] == '(28,)'
