@@ -63,7 +63,7 @@ def open_madrigal_file(fn):
 def get_tec_paths(start_date, end_date, processed_dir):
     file_dates = np.arange(
         np.datetime64(start_date, 'M'),
-        np.datetime64(end_date, 'M') + 1,
+        (np.datetime64(end_date, 's') - np.timedelta64(1, 'h')).astype('datetime64[M]') + 1,
         np.timedelta64(1, 'M')
     )
     file_dates = utils.decompose_datetime64(file_dates)

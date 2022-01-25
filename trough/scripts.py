@@ -75,21 +75,25 @@ def label_trough(start_date, end_date):
 
 
 def _tec_interval_check(start, end):
-    tec_file_names = _tec.get_tec_paths(start, end, config.processed_tec_dir)
-    for file in tec_file_names:
-        needs_processing = _tec.check_processed_data_interval(start, end, file)
-        if needs_processing:
-            return True
-    return False
+    try:
+        data_check = _tec.get_tec_data(start, end)
+        if not data_check.isnull().all(dim=['mlt', 'mlat']).any().item():
+            logger.info(f"tec data already processed {start=}, {end=}")
+            return False
+    except Exception as e:
+        logger.info(f"error getting data {start=}, {end=}: {e}, reprocessing")
+    return True
 
 
 def _arb_interval_check(start, end):
-    arb_file_names = _arb.get_arb_paths(start, end, config.processed_arb_dir)
-    for file in arb_file_names:
-        needs_processing = _arb.check_processed_data_interval(start, end, file)
-        if needs_processing:
-            return True
-    return False
+    try:
+        data_check = _arb.get_arb_data(start, end)
+        if not data_check.isnull().all(dim=['mlt']).any().item():
+            logger.info(f"arb data already processed {start=}, {end=}")
+            return False
+    except Exception as e:
+        logger.info(f"error getting data {start=}, {end=}: {e}, reprocessing")
+    return True
 
 
 def full_run(start_date, end_date):

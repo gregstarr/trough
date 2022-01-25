@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 def get_arb_paths(start_date, end_date, processed_dir):
     file_dates = np.arange(
         np.datetime64(start_date, 'Y'),
-        np.datetime64(end_date, 'Y') + 1,
+        (np.datetime64(end_date, 's') - np.timedelta64(1, 'h')).astype('datetime64[Y]') + 1,
         np.timedelta64(1, 'Y')
     )
     file_dates = utils.decompose_datetime64(file_dates)
