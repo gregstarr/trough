@@ -16,11 +16,11 @@ try:
     from madrigalWeb import madrigalWeb
     import bs4
 except ImportError as e:
-    warnings.warn("Packages required for recreating dataset not installed")
+    warnings.warn(f"Packages required for recreating dataset not installed: {e}")
 
 
 from trough.exceptions import InvalidConfiguration
-from trough._arb import _parse_arb_fn
+from trough._arb import parse_arb_fn
 
 logger = logging.getLogger(__name__)
 
@@ -305,18 +305,24 @@ class ArbDownloader(Downloader):
                         cache_hits += 1
                     else:
                         files = []
-                        url = f'https://ssusi.jhuapl.edu/data_retriver?spc={satellite}&type=edr-aur&year={year:04d}&Doy={doy:03d}'
+                        url = f'https://ssusi.jhuapl.edu/' \
+                              f'data_retriver?spc={satellite}' \
+                              f'&type=edr-aur' \
+                              f'&year={year:04d}' \
+                              f'&Doy={doy:03d}'
+                        soup = None
                         with request.urlopen(url) as r:
                             if r.status == 200:
                                 soup = bs4.BeautifulSoup(r.read(), 'html.parser')
-                                links = soup.find_all('a')
-                                for link in links:
-                                    if 'href' in link.attrs and re.match('PS\.APL_.+EDR-AURORA.+\.NC', str(link.string)):
-                                        sat_name, date = _parse_arb_fn(pathlib.Path(link['href']))
-                                        if date.date() in dates and sat_name.lower() == satellite:
-                                            files.append(f"https://ssusi.jhuapl.edu/{link['href']}")
-                            arb_files[cache_key] = files
-                            cache_misses += 1
+                        if soup is not None:
+                            links = soup.find_all('a')
+                            for link in links:
+                                if 'href' in link.attrs and re.match(r'PS\.APL_.+EDR-AURORA.+\.NC', str(link.string)):
+                                    sat_name, date = parse_arb_fn(pathlib.Path(link['href']))
+                                    if date.date() in dates and sat_name.lower() == satellite:
+                                        files.append(f"https://ssusi.jhuapl.edu/{link['href']}")
+                        arb_files[cache_key] = files
+                        cache_misses += 1
         logger.info(f"{cache_hits=}, {cache_misses=}")
         return arb_files
 

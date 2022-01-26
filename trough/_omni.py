@@ -20,9 +20,10 @@ _omni_formats = ['i', 'i', 'i', 'i', 'i', 'i', 'i', 'i', 'f', 'f', 'f', 'f', 'f'
 
 def open_downloaded_omni_file(fn):
     data = np.loadtxt(fn, dtype={'names': _omni_names, 'formats': _omni_formats})
-    dates = (data['year'] - 1970).astype('datetime64[Y]') + \
-            (data['decimal_day'] - 1).astype('timedelta64[D]') + \
-            data['hour'].astype('timedelta64[h]')
+    years = (data['year'] - 1970).astype('datetime64[Y]')
+    days = (data['decimal_day'] - 1).astype('timedelta64[D]')
+    hours = data['hour'].astype('timedelta64[h]')
+    dates = years + days + hours
     data = xr.Dataset({key: xr.DataArray(data[key], coords={'time': dates}, dims=['time']) for key in _omni_names})
     data = data.drop_vars(['year', 'decimal_day', 'hour', 'bartels_rotation_number'])
     return data

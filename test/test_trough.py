@@ -139,11 +139,11 @@ def test_get_optimization_args():
     assert tv.shape == (D ** 2, D ** 2)
     assert l2.min() == .5
     assert l2.max() == 5
-    l = abs(mlat_grid - arb[0]).ravel()
-    l -= l.min()
-    l = (10 - 1) * l / l.max() + 1
-    l *= .5
-    assert np.all(l == args[0][4])
+    l2reg = abs(mlat_grid - arb[0]).ravel()
+    l2reg -= l2reg.min()
+    l2reg = (10 - 1) * l2reg / l2reg.max() + 1
+    l2reg *= .5
+    assert np.all(l2reg == args[0][4])
 
 
 def test_get_tec_troughs():

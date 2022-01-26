@@ -1,4 +1,3 @@
-import pathlib
 from tempfile import TemporaryDirectory
 from pathlib import Path
 import xarray as xr
@@ -33,7 +32,8 @@ def test_file_list():
 
 def test_verify_download():
     with TemporaryDirectory() as tempdir:
-        server_files = ["https://ssusi.jhuapl.edu/dataN/f16/apl/edr-aur//2009/365//PS.APL_V0105S027CE0019_SC.U_DI.A_GP.F16-SSUSI_PA.APL-EDR-AURORA_DD.20091231_SN.32013-00_DF.NC"]
+        server_files = ["https://ssusi.jhuapl.edu/dataN/f16/apl/edr-aur//2009/365//PS.APL_V0105S027C"
+                        "E0019_SC.U_DI.A_GP.F16-SSUSI_PA.APL-EDR-AURORA_DD.20091231_SN.32013-00_DF.NC"]
         downloader = ArbDownloader(tempdir)
         local_files = downloader._download_files(server_files)
         bad_server_files = downloader._verify_files(local_files, server_files)
@@ -66,7 +66,13 @@ def test_download_arb(test_dates, download_dir):
     assert max(times) > test_dates[-1]
 
 
-@pytest.mark.parametrize(['dt', 'mlt_vals'], itertools.product([np.timedelta64(30, 'm'), np.timedelta64(1, 'h'), np.timedelta64(2, 'h')], [config.get_mlt_vals(), np.arange(10)]))
+@pytest.mark.parametrize(
+    ['dt', 'mlt_vals'],
+    itertools.product(
+        [np.timedelta64(30, 'm'), np.timedelta64(1, 'h'), np.timedelta64(2, 'h')],
+        [config.get_mlt_vals(), np.arange(10)]
+    )
+)
 def test_process_arb(download_dir, processed_dir, test_dates, dt, mlt_vals):
     start, end = test_dates
     correct_times = np.arange(np.datetime64(start, 's'), np.datetime64(end, 's'), dt)

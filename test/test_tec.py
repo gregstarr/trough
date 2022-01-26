@@ -48,7 +48,7 @@ def test_file_list():
         cache_fn = Path(tempdir) / "file_list.json"
         cache = {'100139613': 'file_1', '100139351': 'file_2'}
         with open(cache_fn, 'w') as f:
-                json.dump(cache, f)
+            json.dump(cache, f)
         downloader = MadrigalTecDownloader(tempdir, 'gstarr', 'gstarr@bu.edu', 'bu')
         download_dict = downloader._get_file_list(start_date, end_date)
         assert cache == download_dict
@@ -90,13 +90,14 @@ def test_download_tec(test_dates, download_dir):
     assert data.time.values[-1] > np.datetime64(end, 's')
 
 
-map_periods = [np.timedelta64(10, 'm'), np.timedelta64(30, 'm'), np.timedelta64(1, 'h'), np.timedelta64(2, 'h')]
-@pytest.mark.parametrize(['dt', 'mlt_bins', 'mlat_bins'],
-                         itertools.product(
-                             map_periods,
-                             [config.get_mlt_bins(), np.arange(10)],
-                             [config.get_mlat_bins(), np.arange(10)]
-                         ))
+@pytest.mark.parametrize(
+    ['dt', 'mlt_bins', 'mlat_bins'],
+    itertools.product(
+        [np.timedelta64(10, 'm'), np.timedelta64(30, 'm'), np.timedelta64(1, 'h'), np.timedelta64(2, 'h')],
+        [config.get_mlt_bins(), np.arange(10)],
+        [config.get_mlat_bins(), np.arange(10)]
+    )
+)
 def test_process_tec(download_dir, process_dir, test_dates, dt, mlt_bins, mlat_bins):
     start, end = test_dates
     correct_times = np.arange(np.datetime64(start, 's'), np.datetime64(end, 's'), dt)

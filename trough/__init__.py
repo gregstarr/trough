@@ -11,7 +11,7 @@ if _config_path_file.exists():
     config.load_json(_config_path)
     logger.info(f"Loading config: {_config_path}")
 else:
-    logger.info(f"no previous config found, using default config")
+    logger.info("no previous config found, using default config")
 
 from . import scripts
 from ._tec import get_tec_data

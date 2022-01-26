@@ -9,7 +9,7 @@ import warnings
 try:
     import h5py
 except ImportError as e:
-    warnings.warn("Packages required for recreating dataset not installed")
+    warnings.warn(f"Packages required for recreating dataset not installed: {e}")
 
 from trough import config, utils
 from trough.exceptions import InvalidProcessDates
@@ -36,7 +36,7 @@ def get_arb_data(start_date, end_date, processed_dir=None):
     return data.sel(time=slice(start_date, end_date))
 
 
-def _parse_arb_fn(path):
+def parse_arb_fn(path):
     sat_name = path.name[36:39]
     date = datetime.strptime(path.name[67:75], "%Y%m%d")
     return sat_name, date
@@ -48,7 +48,7 @@ def _get_downloaded_arb_data(start_date, end_date, input_dir):
     data = {field: [] for field in _arb_fields}
     data['sat'] = []
     for path in Path(input_dir).glob('*.NC'):
-        sat_name, date1 = _parse_arb_fn(path)
+        sat_name, date1 = parse_arb_fn(path)
         date2 = date1 + timedelta(days=1)
         if start_date > date2 or end_date < date1:
             continue
@@ -73,7 +73,7 @@ def process_interval(start_date, end_date, output_fn, input_dir, mlt_vals, sampl
         logger.error(f"times size: {times.size}")
         if len(times) > 0:
             logger.error(f"times: {min(times)} - {max(times)}")
-        raise InvalidProcessDates(f"Need to download full data range before processing")
+        raise InvalidProcessDates("Need to download full data range before processing")
     logger.info(f"{times.shape[0]} time points")
     sort_idx = np.argsort(times)
     times = times[sort_idx]

@@ -5,7 +5,7 @@ try:
     import h5py
     from skimage.util import view_as_windows
 except ImportError as e:
-    warnings.warn("Packages required for recreating dataset not installed")
+    warnings.warn(f"Packages required for recreating dataset not installed: {e}")
 
 
 def datetime64_to_datetime(dt64):

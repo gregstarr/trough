@@ -14,7 +14,7 @@ try:
     from skimage import measure, morphology
     from sklearn.metrics.pairwise import rbf_kernel
 except ImportError as e:
-    warnings.warn("Packages required for recreating dataset not installed")
+    warnings.warn(f"Packages required for recreating dataset not installed: {e}")
 
 from trough import config, utils, _tec, _arb
 

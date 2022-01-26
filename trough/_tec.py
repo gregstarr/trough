@@ -10,7 +10,7 @@ import warnings
 try:
     import h5py
 except ImportError as e:
-    warnings.warn("Packages required for recreating dataset not installed")
+    warnings.warn(f"Packages required for recreating dataset not installed: {e}")
 
 from trough import config, utils
 from trough.exceptions import InvalidProcessDates
@@ -19,7 +19,7 @@ from trough.exceptions import InvalidProcessDates
 logger = logging.getLogger(__name__)
 
 
-def _parse_madrigal_fn(path):
+def parse_madrigal_fn(path):
     date = datetime.strptime(path.name[3:9], "%y%m%d")
     return date
 
@@ -29,7 +29,7 @@ def _get_downloaded_tec_data(start_date, end_date, input_dir):
     end_date += timedelta(hours=3)
     data = []
     for path in Path(input_dir).glob('*.hdf5'):
-        date1 = _parse_madrigal_fn(path)
+        date1 = parse_madrigal_fn(path)
         date2 = date1 + timedelta(days=1)
         if start_date > date2 or end_date < date1:
             continue
@@ -131,7 +131,7 @@ def process_interval(start_date, end_date, output_fn, input_dir, sample_dt, mlat
         logger.error(f"mad_data shape: {mad_data.shape}")
         if mad_data.shape != ():
             logger.error(f"times: {min(mad_data.time.values)} - {max(mad_data.time.values)}")
-        raise InvalidProcessDates(f"Need to download full data range before processing")
+        raise InvalidProcessDates("Need to download full data range before processing")
     logger.info(f"got mad data: {mad_data.shape=}, {mad_data.time.values[0]=}, {mad_data.time.values[-1]=}")
     mad_data = mad_data.sel(time=slice(ref_times[0], ref_times[-1] + sample_dt))
 
