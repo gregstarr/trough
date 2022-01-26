@@ -110,7 +110,9 @@ class Downloader(abc.ABC):
         # download files
         local_files = self._download_files(server_files)
         # make sure all files open and have data
+        logger.info("verifying...")
         bad_server_files = self._verify_files(local_files, server_files)
+        logger.info(f"{len(bad_server_files)} bad files")
         if bad_server_files:
             fixed_local_files = self._download_files(bad_server_files)
             still_bad_server_files = self._verify_files(fixed_local_files, bad_server_files)

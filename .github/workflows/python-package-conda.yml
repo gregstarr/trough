@@ -8,34 +8,41 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.7', '3.8', '3.9', '3.10']
+        python-version: ['3.8', '3.9', '3.10']
 
     steps:
     - uses: actions/checkout@v2
-    - name: Add conda to system path
+    - uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python-version }}
+          environment-file: environment.yml
+    - name: Conda info
+      shell: bash -l {0}
+      run: conda info
+    - name: Finish python setup
+      shell: bash -l {0}
       run: |
-        # $CONDA is an environment variable pointing to the root of the miniconda directory
-        echo $CONDA/bin >> $GITHUB_PATH
-    - run: |
-        conda env create --file environment.yml --name test python=${{ matrix.python-version }}
-        source activate test
         pip install apexpy
         pip install --upgrade numpy
     - name: Lint with flake8
+      shell: bash -l {0}
       run: |
-        source activate test
         conda install flake8
         # stop the build if there are Python syntax errors or undefined names
-        python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        python -m flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - run: |
-        source activate test
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Run test suite
+      shell: bash -l {0}
+      run: |
         conda install pytest
         pip install pytest-html
         pip install -e .
         pytest test --html=${{ matrix.python-version }}-results.html --self-contained-html
-    - run: mv test.log ${{ matrix.python-version }}-test.log
+    - name: Move artifacts
+      shell: bash -l {0}
+      run: mv test.log ${{ matrix.python-version }}-test.log
       if: always()
     - uses: actions/upload-artifact@v2
       if: always()
