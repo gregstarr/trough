@@ -13,7 +13,8 @@ if _config_path_file.exists():
 else:
     logger.info("no previous config found, using default config")
 
-from . import scripts
-from ._tec import get_tec_data
-from ._trough import get_trough_labels, get_data
-from . import utils
+from ._tec import get_tec_data  # noqa: E402
+from ._trough import get_trough_labels, get_data  # noqa: E402
+from . import utils  # noqa: E402
+
+__all__ = ['config', 'get_tec_data', 'get_trough_labels', 'get_data', 'utils']

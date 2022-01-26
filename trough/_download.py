@@ -169,24 +169,20 @@ class MadrigalTecDownloader(Downloader):
         experiments = sorted(self._get_tec_experiments(start_date - timedelta(hours=3), end_date + timedelta(hours=3)))
         logger.info(f"found {len(experiments)} experiments")
         tec_files = {}
-        cache_hits = 0
-        cache_misses = 0
         for i, experiment in enumerate(experiments):
             if len(experiments) > 100 and not (i % (len(experiments) // 100)):
                 logger.info(f"{round(100 * i / len(experiments))}% finished")
             cache_key = str(experiment.id)
             if cache_key in self.cache:
                 files = self.cache[cache_key]
-                cache_hits += 1
             else:
                 experiment_files = self.server.getExperimentFiles(experiment.id)
                 files = [exp.name for exp in experiment_files if exp.kindat == 3500]
-                cache_misses += 1
             tec_files[cache_key] = files
-        logger.info(f"{cache_hits=}, {cache_misses=}")
         return tec_files
 
-    def _verify_local_file(self, local_file):
+    @staticmethod
+    def _verify_local_file(local_file):
         try:
             with h5py.File(local_file, 'r') as f:
                 tec = f['Data']['Array Layout']['2D Parameters']['tec'][()]
@@ -227,7 +223,8 @@ class OmniDownloader(Downloader):
             self._download_file(file, local_path)
         return local_files
 
-    def _download_http_file(self, file, local_path):
+    @staticmethod
+    def _download_http_file(file, local_path):
         url = "https://spdf.gsfc.nasa.gov" + file
         _download_http_file(url, local_path)
 
@@ -243,7 +240,8 @@ class OmniDownloader(Downloader):
         }
         return files
 
-    def _verify_local_file(self, local_file):
+    @staticmethod
+    def _verify_local_file(local_file):
         return (pathlib.Path(local_file).stat().st_size / (2 ** 20)) > 1  # file size > 1Mb
 
     def _verify_files(self, local_files, server_files):
@@ -281,52 +279,38 @@ class ArbDownloader(Downloader):
         n_days = math.ceil((end_date - start_date) / timedelta(days=1))
         logger.info(f"getting files for {n_days} days")
         days = [start_date + timedelta(days=t) for t in range(n_days)]
-        dates = [d.date() for d in days]
-        years = set([date.year for date in days])
-        date_struct = {year: [_doy(date) for date in days if date.year == year] for year in years}
-
         arb_files = {}
-
-        total_doys = len(days) * len(self.satellites)
-        counter = 1
-        cache_hits = 0
-        cache_misses = 0
-
-        for s, satellite in enumerate(self.satellites):
-            counter = max(counter, round(s * total_doys / len(self.satellites)))
-            for year, doys in date_struct.items():
-                for doy in doys:
-                    if total_doys > 100 and (counter % (total_doys // 100)) == 0:
-                        logger.info(f"{round(100 * counter / total_doys)}% finished")
-                    counter += 1
-                    cache_key = f"{satellite}_{year}_{doy}"
-                    if cache_key in self.cache:
-                        arb_files[cache_key] = self.cache[cache_key]
-                        cache_hits += 1
-                    else:
-                        files = []
-                        url = f'https://ssusi.jhuapl.edu/' \
-                              f'data_retriver?spc={satellite}' \
-                              f'&type=edr-aur' \
-                              f'&year={year:04d}' \
-                              f'&Doy={doy:03d}'
-                        soup = None
-                        with request.urlopen(url) as r:
-                            if r.status == 200:
-                                soup = bs4.BeautifulSoup(r.read(), 'html.parser')
-                        if soup is not None:
-                            links = soup.find_all('a')
-                            for link in links:
-                                if 'href' in link.attrs and re.match(r'PS\.APL_.+EDR-AURORA.+\.NC', str(link.string)):
-                                    sat_name, date = parse_arb_fn(pathlib.Path(link['href']))
-                                    if date.date() in dates and sat_name.lower() == satellite:
-                                        files.append(f"https://ssusi.jhuapl.edu/{link['href']}")
-                        arb_files[cache_key] = files
-                        cache_misses += 1
-        logger.info(f"{cache_hits=}, {cache_misses=}")
+        for i, day in enumerate(days):
+            if len(days) > 100 and not (i % (len(days) // 100)):
+                logger.info(f"{round(100 * i / len(days))}% finished")
+            arb_files.update(self._get_files_for_day(day))
         return arb_files
 
-    def _verify_local_file(self, local_file):
+    def _get_files_for_day(self, day):
+        files = {}
+        for satellite in self.satellites:
+            doy = _doy(day)
+            year = day.year
+            cache_key = f"{satellite}_{year}_{doy}"
+            if cache_key in self.cache:
+                files[cache_key] = self.cache[cache_key]
+            else:
+                files[cache_key] = []
+                url = f'https://ssusi.jhuapl.edu/data_retriver?spc={satellite}&type=edr-aur&' \
+                      f'year={year:04d}&Doy={doy:03d}'
+                with request.urlopen(url) as r:
+                    if r.status == 200:
+                        soup = bs4.BeautifulSoup(r.read(), 'html.parser')
+                        links = soup.find_all('a')
+                        for link in links:
+                            if 'href' in link.attrs and re.match(r'PS\.APL_.+EDR-AURORA.+\.NC', str(link.string)):
+                                sat_name, date = parse_arb_fn(pathlib.Path(link['href']))
+                                if date.date() == day.date() and sat_name.lower() == satellite:
+                                    files[cache_key].append(f"https://ssusi.jhuapl.edu/{link['href']}")
+        return files
+
+    @staticmethod
+    def _verify_local_file(local_file):
         try:
             with h5py.File(local_file, 'r') as f:
                 lon = f['MODEL_NORTH_GEOGRAPHIC_LONGITUDE'][()]

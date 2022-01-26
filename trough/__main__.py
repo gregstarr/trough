@@ -2,7 +2,7 @@ import argparse
 import logging
 from sys import stdout
 
-import trough
+from trough import config, scripts
 
 
 DESCRIPTION = """Main Ionospheric Trough Python Library main script
@@ -19,7 +19,7 @@ def setup(args):
     file_handler = logging.FileHandler('log_output.log', mode='w')
     logging.basicConfig(format='%(asctime)-19s %(name)-20s %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                         level=logging.INFO, handlers=[stream_handler, file_handler])
-    trough.config.load_json(args.config)
+    config.load_json(args.config)
 
 
 def main():
@@ -28,9 +28,9 @@ def main():
     parser.add_argument("--config-save", type=str, help="config file save file")
     args = parser.parse_args()
     setup(args)
-    script_fun = getattr(trough.scripts, trough.config.script_name)
-    script_fun(trough.config.start_date, trough.config.end_date)
-    trough.config.save(args.config_save)
+    script_fun = getattr(scripts, config.script_name)
+    script_fun(config.start_date, config.end_date)
+    config.save(args.config_save)
 
 
 if __name__ == "__main__":
