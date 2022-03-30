@@ -14,13 +14,13 @@ from trough.exceptions import InvalidProcessDates
 
 
 def test_file_list():
-    start_date = datetime(2001, 1, 1, 12, 0, 0)
-    end_date = datetime(2001, 1, 2, 12, 0, 0)
+    start_date = datetime(2001, 1, 4, 12, 0, 0)
+    end_date = datetime(2001, 1, 5, 12, 0, 0)
     with TemporaryDirectory() as tempdir:
         cache_fn = Path(tempdir) / "file_list.json"
         cache = {}
         for sat in ['f16', 'f17', 'f18', 'f19']:
-            for doy in [1, 2]:
+            for doy in [3, 4, 5]:
                 cache_key = f"{sat}_{2001}_{doy}"
                 cache[cache_key] = [f'{cache_key}_file_1', f'{cache_key}_file_2']
                 with open(cache_fn, 'w') as f:
@@ -79,8 +79,8 @@ def test_process_arb(download_dir, processed_dir, test_dates, dt, mlt_vals):
     processed_file = Path(processed_dir) / 'arb_test.nc'
     process_interval(start, end, processed_file, download_dir, mlt_vals, dt)
     assert processed_file.exists()
-    data = xr.open_dataarray(processed_file)
-    assert data.shape == (correct_times.shape[0], mlt_vals.shape[0])
+    data = xr.open_dataset(processed_file)
+    assert data['arb_north'].shape == (correct_times.shape[0], mlt_vals.shape[0])
     assert (data.mlt == mlt_vals).all().item()
     assert (data.time == correct_times).all().item()
 
@@ -101,7 +101,7 @@ def test_get_arb_data(download_dir, processed_dir, test_dates):
     processed_file = get_arb_paths(start, end, processed_dir)[0]
     process_interval(start, end, processed_file, download_dir, mlt, dt)
     data = get_arb_data(start, end, processed_dir)
-    assert data.shape == (correct_times.shape[0], mlt.shape[0])
+    assert data['arb_north'].shape == (correct_times.shape[0], mlt.shape[0])
     assert (data.mlt == mlt).all().item()
     assert (data.time == correct_times).all().item()
 
@@ -121,6 +121,6 @@ def test_scripts(test_dates):
             dt = np.timedelta64(1, 'h')
             mlt = config.get_mlt_vals()
             correct_times = np.arange(np.datetime64(test_dates[0]), np.datetime64(test_dates[-1]), dt)
-            assert data.shape == (correct_times.shape[0], mlt.shape[0])
+            assert data['arb_north'].shape == (correct_times.shape[0], mlt.shape[0])
             assert (data.mlt == mlt).all().item()
             assert (data.time == correct_times).all().item()

@@ -274,11 +274,11 @@ class ArbDownloader(Downloader):
         return local_files
 
     def _get_file_list(self, start_date, end_date):
-        start_date -= timedelta(hours=3)
-        end_date += timedelta(hours=3)
-        n_days = math.ceil((end_date - start_date) / timedelta(days=1))
+        date1 = start_date - timedelta(days=1)
+        date2 = end_date + timedelta(days=1)
+        n_days = math.ceil((date2 - date1) / timedelta(days=1))
         logger.info(f"getting files for {n_days} days")
-        days = [start_date + timedelta(days=t) for t in range(n_days)]
+        days = [date1 + timedelta(days=t) for t in range(n_days)]
         arb_files = {}
         for i, day in enumerate(days):
             if len(days) > 100 and not (i % (len(days) // 100)):

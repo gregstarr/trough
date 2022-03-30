@@ -116,7 +116,7 @@ def fix_boundaries(labels):
 
 
 def remove_auroral(data, offset=3):
-    data['labels'] *= data.mlat < (data['arb'] + offset)
+    data['labels'] *= data.mlat < (data['arb_north'] + offset)
 
 
 def postprocess(data, perimeter_th=50, area_th=1, closing_r=0):
@@ -219,7 +219,7 @@ def label_trough_interval(start_date, end_date, params, tec_dir, arb_dir, omni_f
     data = _tec.get_tec_data(start_date, end_date, tec_dir).to_dataset(name='tec')
     preprocess_interval(data, bg_est_shape=params.bg_est_shape)
 
-    data['arb'] = _arb.get_arb_data(start_date, end_date, arb_dir)
+    data = data.merge(_arb.get_arb_data(start_date, end_date, arb_dir))
     get_model(data, omni_file)
     args = get_optimization_args(data, params.model_weight_max, params.rbf_bw, params.tv_hw, params.tv_vw,
                                  params.l2_weight, params.tv_weight)
@@ -279,7 +279,7 @@ def label_trough_dataset(start_date, end_date, params=None, tec_dir=None, arb_di
 def get_label_paths(start_date, end_date, processed_dir):
     file_dates = np.arange(
         np.datetime64(start_date, 'Y'),
-        np.datetime64(end_date, 'Y') + 1,
+        (np.datetime64(end_date, 's') - np.timedelta64(1, 'h')).astype('datetime64[Y]') + 1,
         np.timedelta64(1, 'Y')
     )
     file_dates = utils.decompose_datetime64(file_dates)
@@ -290,6 +290,8 @@ def get_trough_labels(start_date, end_date, labels_dir=None):
     if labels_dir is None:
         labels_dir = config.processed_labels_dir
     data = xr.concat([xr.open_dataarray(file) for file in get_label_paths(start_date, end_date, labels_dir)], 'time')
+    _, idx = np.unique(data['time'], return_index=True)
+    data = data.isel(time=idx)
     return data.sel(time=slice(start_date, end_date))
 
 
@@ -303,4 +305,4 @@ def get_data(start_date, end_date, tec_dir=None, omni_file=None, labels_dir=None
     data = xr.open_dataset(omni_file).sel(time=slice(start_date, end_date))
     data['tec'] = _tec.get_tec_data(start_date, end_date, tec_dir)
     data['labels'] = get_trough_labels(start_date, end_date, labels_dir)
-    return data
+    return data.isel(time=slice(0, -1))

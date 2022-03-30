@@ -3,8 +3,9 @@ import xarray as xr
 from datetime import datetime, timedelta
 from tempfile import TemporaryDirectory
 from pathlib import Path
+import pytest
 
-from trough import config, _trough, scripts
+from trough import config, _trough, scripts, get_data
 from trough._config import TroughIdParams
 
 
@@ -89,7 +90,7 @@ def test_postprocess():
             coords=coords,
             dims=['time', 'mlat', 'mlt']
         ),
-        'arb': xr.DataArray(
+        'arb_north': xr.DataArray(
             arb,
             coords={'time': [0], 'mlt': config.get_mlt_vals()},
             dims=['time', 'mlt']
@@ -163,30 +164,41 @@ def test_get_tec_troughs():
     assert labels.shape == (12, 60, 180)
     assert labels[1, 20:30, 60:120].mean() > .5
     for i in range(12):
-        assert labels[i][(data.mlat > data['arb'][i] + 3).values].sum() == 0
+        assert labels[i][(data.mlat > data['arb_north'][i] + 3).values].sum() == 0
 
 
-def test_process_trough_interval(test_dates):
-    start_date, end_date = test_dates
+@pytest.mark.parametrize('dates',
+                         [
+                             [datetime(2021, 1, 3, 6, 0, 0), datetime(2021, 1, 3, 12, 0, 0)],
+                             [datetime(2020, 12, 31, 20, 0, 0), datetime(2021, 1, 1, 4, 0, 0)]
+                         ])
+def test_process_trough_interval(dates):
+    start_date, end_date = dates
+    n_times = (end_date - start_date) / timedelta(hours=1)
     scripts.download_all(start_date, end_date)
     scripts.process_all(start_date, end_date)
     data = _trough.label_trough_interval(start_date, end_date, config.trough_id_params, config.processed_tec_dir,
                                          config.processed_arb_dir, config.processed_omni_file)
     assert 'labels' in data
     assert 'tec' in data
-    assert data.time.shape[0] == 6
+    assert data.time.shape[0] == n_times
     assert data.mlat.shape[0] == 60
     assert data.mlt.shape[0] == 180
     assert np.nanmean(data['tec'].values[data['labels'].values]) < np.nanmean(data['tec'].values[~data['labels'].values])
 
 
-def test_script(test_dates):
+@pytest.mark.parametrize('dates',
+                         [
+                             [datetime(2021, 1, 3, 6, 0, 0), datetime(2021, 1, 3, 12, 0, 0)],
+                             [datetime(2020, 12, 31, 20, 0, 0), datetime(2021, 1, 1, 4, 0, 0)]
+                         ])
+def test_script(dates):
+    start_date, end_date = dates
+    n_times = (end_date - start_date) / timedelta(hours=1)
     with TemporaryDirectory() as tempdir:
         with config.temp_config(base_dir=tempdir):
-            scripts.full_run(*test_dates)
-            path = Path(config.processed_labels_dir) / "labels_2021.nc"
-            assert path.exists()
-            data = xr.open_dataarray(path)
-            data.load()
-            assert data.size > 1
-            data.close()
+            scripts.full_run(*dates)
+            n_files = len([p for p in Path(config.processed_labels_dir).glob('labels*.nc')])
+            assert n_files == (end_date.year - start_date.year + 1)
+            data = get_data(start_date, end_date)
+            assert data.time.shape[0] == n_times

@@ -1,0 +1,32 @@
+{
+  "base_dir": "path/to/trough_directory",
+  "trough_id_params": {
+    "bg_est_shape": [
+      1,
+      19,
+      17
+    ],
+    "model_weight_max": 15,
+    "rbf_bw": 1,
+    "tv_hw": 2,
+    "tv_vw": 1,
+    "l2_weight": 0.09,
+    "tv_weight": 0.15,
+    "perimeter_th": 30,
+    "area_th": 30,
+    "threshold": 1,
+    "closing_rad": 0
+  },
+  "madrigal_user_name": "your_name",
+  "madrigal_user_email": "your_email@email.com",
+  "madrigal_user_affil": "your_affiliation",
+  "nasa_spdf_download_method": "ftp",
+  "lat_res": 1,
+  "lon_res": 2,
+  "time_res_unit": "h",
+  "time_res_n": 1,
+  "script_name": "full_run",
+  "start_date": "20100101",
+  "end_date": "20220101",
+  "keep_download": false
+}

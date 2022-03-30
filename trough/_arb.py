@@ -6,6 +6,7 @@ from apexpy import Apex
 from scipy.interpolate import interp1d
 import logging
 import warnings
+
 try:
     import h5py
 except ImportError as e:
@@ -14,8 +15,11 @@ except ImportError as e:
 from trough import config, utils
 from trough.exceptions import InvalidProcessDates
 
-
-_arb_fields = ['YEAR', 'DOY', 'TIME', 'ALTITUDE', 'MODEL_NORTH_GEOGRAPHIC_LATITUDE', 'MODEL_NORTH_GEOGRAPHIC_LONGITUDE']
+_arb_fields = [
+    'YEAR', 'DOY', 'TIME', 'ALTITUDE',
+    'MODEL_NORTH_GEOGRAPHIC_LATITUDE', 'MODEL_NORTH_GEOGRAPHIC_LONGITUDE',
+    'MODEL_SOUTH_GEOGRAPHIC_LATITUDE', 'MODEL_SOUTH_GEOGRAPHIC_LONGITUDE'
+]
 logger = logging.getLogger(__name__)
 
 
@@ -32,7 +36,7 @@ def get_arb_paths(start_date, end_date, processed_dir):
 def get_arb_data(start_date, end_date, processed_dir=None):
     if processed_dir is None:
         processed_dir = config.processed_arb_dir
-    data = xr.concat([xr.open_dataarray(file) for file in get_arb_paths(start_date, end_date, processed_dir)], 'time')
+    data = xr.concat([xr.open_dataset(file) for file in get_arb_paths(start_date, end_date, processed_dir)], 'time')
     return data.sel(time=slice(start_date, end_date))
 
 
@@ -68,26 +72,40 @@ def process_interval(start_date, end_date, output_fn, input_dir, mlt_vals, sampl
     logger.info(f"processing arb data for {start_date, end_date}")
     ref_times = np.arange(np.datetime64(start_date, 's'), np.datetime64(end_date, 's'), sample_dt)
     apex = Apex(date=start_date)
-    data, times = _get_downloaded_arb_data(start_date, end_date, input_dir)
+    arb_data, times = _get_downloaded_arb_data(start_date, end_date, input_dir)
     if times.size == 0 or min(times) > ref_times[0] or max(times) < ref_times[-1]:
         logger.error(f"times size: {times.size}")
         if len(times) > 0:
-            logger.error(f"times: {min(times)} - {max(times)}")
+            logger.error(f"{min(times)=} {ref_times[0]=} {max(times)=} {ref_times[-1]=}")
         raise InvalidProcessDates("Need to download full data range before processing")
     logger.info(f"{times.shape[0]} time points")
     sort_idx = np.argsort(times)
-    times = times[sort_idx]
-    mlat = np.empty((times.shape[0], mlt_vals.shape[0]))
-    for i, idx in enumerate(sort_idx):
-        lat = data['MODEL_NORTH_GEOGRAPHIC_LATITUDE'][idx]
-        lon = data['MODEL_NORTH_GEOGRAPHIC_LONGITUDE'][idx]
-        height = np.mean(data['ALTITUDE'][idx])
-        apx_lat, mlt = apex.convert(lat, lon, 'geo', 'mlt', height, utils.datetime64_to_datetime(times[idx]))
-        mlat[i] = np.interp(mlt_vals, mlt, apx_lat, period=24)
+
+    data = {}
+    for hemi in ['NORTH', 'SOUTH']:
+        mlat = np.empty((times.shape[0], mlt_vals.shape[0]))
+        for i, idx in enumerate(sort_idx):
+            height = np.mean(arb_data['ALTITUDE'][idx])
+            lat = arb_data[f'MODEL_{hemi}_GEOGRAPHIC_LATITUDE'][idx]
+            lon = arb_data[f'MODEL_{hemi}_GEOGRAPHIC_LONGITUDE'][idx]
+            apx_lat, mlt = apex.convert(lat, lon, 'geo', 'mlt', height, utils.datetime64_to_datetime(times[idx]))
+            mlat[i] = np.interp(mlt_vals, mlt, apx_lat, period=24)
+        good_mask = np.mean(abs(mlat - np.median(mlat, axis=0, keepdims=True)), axis=1) < 1
+        interpolator = interp1d(
+            times.astype('datetime64[s]').astype(float)[sort_idx][good_mask],
+            mlat[good_mask],
+            axis=0, bounds_error=False
+        )
+        mlat = interpolator(ref_times.astype(float))
+        data[f'arb_{hemi.lower()}'] = xr.DataArray(
+            mlat,
+            coords={'time': ref_times, 'mlt': mlt_vals},
+            dims=['time', 'mlt']
+        )
+
     logger.info(f"ref times: [{ref_times[0]}, {ref_times[-1]}]")
-    interpolator = interp1d(times.astype('datetime64[s]').astype(float), mlat, axis=0, bounds_error=False)
-    mlat = interpolator(ref_times.astype(float))
-    data = xr.DataArray(mlat, coords={'time': ref_times, 'mlt': mlt_vals}, dims=['time', 'mlt'])
+
+    data = xr.Dataset(data)
     data.to_netcdf(output_fn)
 
 
