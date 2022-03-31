@@ -172,7 +172,7 @@ def test_get_tec_troughs():
     assert labels_north.shape == (n_hours + 1, 60, 180)
     assert labels_north[1, 20:30, 60:120].mean() > .5
     assert labels_south.shape == (n_hours + 1, 60, 180)
-    assert labels_south[1, 20:30, 60:120].mean() > .5
+    assert labels_south[3, 20:30, 60:80].mean() > .5
     for i in range(12):
         assert labels_north[i][(data_north.mlat > data_north['arb'][i] + 3).values].sum() == 0
         assert labels_south[i][(data_south.mlat < data_south['arb'][i] - 3).values].sum() == 0

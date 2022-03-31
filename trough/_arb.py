@@ -120,7 +120,8 @@ def process_auroral_boundary_dataset(start_date, end_date, download_dir=None, pr
 
     for year in range(start_date.year, end_date.year + 1):
         start = max(start_date, datetime(year, 1, 1))
-        end = min(end_date, datetime(year + 1, 1, 1))
+        end = utils.datetime64_to_datetime(np.datetime64(datetime(year + 1, 1, 1)) - dt)
+        end = min(end_date, end)
         if end - start <= timedelta(hours=1):
             continue
         for hemisphere in ['north', 'south']:

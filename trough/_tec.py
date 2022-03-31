@@ -185,7 +185,10 @@ def process_tec_dataset(start_date, end_date, download_dir=None, process_dir=Non
         logger.info(f"tec year {year=}")
         for month in range(1, 13):
             start = datetime(year, month, 1)
-            end = datetime(year, month + 1, 1) if month < 12 else datetime(year + 1, 1, 1)
+            if month == 12:
+                end = utils.datetime64_to_datetime(np.datetime64(datetime(year + 1, 1, 1)) - dt)
+            else:
+                end = datetime(year, month + 1, 1)
             logger.info(f"tec interval {start=} {end=}")
             if start >= end_date or end <= start_date:
                 continue

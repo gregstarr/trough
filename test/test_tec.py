@@ -74,7 +74,7 @@ def test_file_list():
     end_date = datetime(2001, 1, 2, 12, 0, 0)
     with TemporaryDirectory() as tempdir:
         cache_fn = Path(tempdir) / "file_list.json"
-        cache = {'100139613': 'file_1', '100139351': 'file_2'}
+        cache = {'100139613': 'file_1', '100139351': 'file_2', '100119343': 'file_3', '100139428': 'file_4'}
         with open(cache_fn, 'w') as f:
             json.dump(cache, f)
         downloader = MadrigalTecDownloader(tempdir, 'gstarr', 'gstarr@bu.edu', 'bu')
