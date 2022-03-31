@@ -48,9 +48,9 @@ def test_default_main(preserve_config_pointer):
             print(proc2.stderr)
             print()
             outputs = [s.decode() for s in proc2.stdout.splitlines()]
-            assert outputs[0] == '(27, 60, 180)'
-            assert outputs[1] == '(27,)'
-            assert outputs[2] == '(27, 60, 180)'
+            assert outputs[0] == '(28, 60, 180)'
+            assert outputs[1] == '(28,)'
+            assert outputs[2] == '(28, 60, 180)'
             assert float(outputs[3]) < .5
             assert float(outputs[4]) > 0
         finally:

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 def get_arb_paths(start_date, end_date, hemisphere, processed_dir):
     file_dates = np.arange(
         np.datetime64(start_date, 'Y'),
-        (np.datetime64(end_date, 's') - np.timedelta64(1, 'h')).astype('datetime64[Y]') + 1,
+        (np.datetime64(end_date, 's')).astype('datetime64[Y]') + 1,
         np.timedelta64(1, 'Y')
     )
     file_dates = utils.decompose_datetime64(file_dates)
@@ -47,8 +47,8 @@ def parse_arb_fn(path):
 
 
 def _get_downloaded_arb_data(start_date, end_date, input_dir):
-    start_date -= timedelta(hours=3)
-    end_date += timedelta(hours=3)
+    start_date -= timedelta(days=1)
+    end_date += timedelta(days=1)
     data = {field: [] for field in _arb_fields}
     data['sat'] = []
     for path in Path(input_dir).glob('*.NC'):
@@ -70,7 +70,7 @@ def _get_downloaded_arb_data(start_date, end_date, input_dir):
 
 def process_interval(start_date, end_date, hemisphere, output_fn, input_dir, mlt_vals, sample_dt):
     logger.info(f"processing arb data for {start_date, end_date}")
-    ref_times = np.arange(np.datetime64(start_date, 's'), np.datetime64(end_date, 's'), sample_dt)
+    ref_times = np.arange(np.datetime64(start_date, 's'), np.datetime64(end_date, 's') + sample_dt, sample_dt)
     apex = Apex(date=start_date)
     arb_data, times = _get_downloaded_arb_data(start_date, end_date, input_dir)
     if times.size == 0 or min(times) > ref_times[0] or max(times) < ref_times[-1]:

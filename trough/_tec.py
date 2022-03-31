@@ -63,7 +63,7 @@ def open_madrigal_file(fn):
 def get_tec_paths(start_date, end_date, hemisphere, processed_dir):
     file_dates = np.arange(
         np.datetime64(start_date, 'M'),
-        (np.datetime64(end_date, 's') - np.timedelta64(1, 'h')).astype('datetime64[M]') + 1,
+        (np.datetime64(end_date, 's')).astype('datetime64[M]') + 1,
         np.timedelta64(1, 'M')
     )
     file_dates = utils.decompose_datetime64(file_dates)
@@ -130,7 +130,7 @@ def process_interval(start_date, end_date, hemisphere, output_fn, input_dir, sam
     """
     logger.info(f"processing tec data for {start_date, end_date}")
     calc_bins = functools.partial(calculate_bins, mlat_bins=mlat_bins, mlt_bins=mlt_bins, hemisphere=hemisphere)
-    ref_times = np.arange(np.datetime64(start_date, 's'), np.datetime64(end_date, 's'), sample_dt)
+    ref_times = np.arange(np.datetime64(start_date, 's'), np.datetime64(end_date, 's') + sample_dt, sample_dt)
     logger.info(f"ref times: {ref_times.shape}, {ref_times[0]=}, {ref_times[-1]=}")
     mad_data = _get_downloaded_tec_data(start_date, end_date, input_dir)
     if mad_data.shape == () or min(mad_data.time.values) > ref_times[0] or max(mad_data.time.values) < ref_times[-1]:
@@ -146,7 +146,7 @@ def process_interval(start_date, end_date, hemisphere, output_fn, input_dir, sam
     mad_data = get_mag_coords(apex, mad_data)
 
     logger.info(f"Setting up for binning, {mad_data.time.values[0]=}, {mad_data.time.values[-1]=}")
-    time_bins = np.arange(mad_data.time.values[0], mad_data.time.values[-1] + sample_dt, sample_dt)
+    time_bins = np.arange(ref_times[0], ref_times[-1] + 2 * sample_dt, sample_dt)
     data_groups = mad_data.groupby_bins('time', bins=time_bins, right=False)
     data = [_data for _interval, _data in data_groups]
     logger.info("Calculated bins")

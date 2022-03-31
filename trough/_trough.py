@@ -299,7 +299,7 @@ def label_trough_dataset(start_date, end_date, params=None, tec_dir=None, arb_di
 def get_label_paths(start_date, end_date, hemisphere, processed_dir):
     file_dates = np.arange(
         np.datetime64(start_date, 'Y'),
-        (np.datetime64(end_date, 's') - np.timedelta64(1, 'h')).astype('datetime64[Y]') + 1,
+        (np.datetime64(end_date, 's')).astype('datetime64[Y]') + 1,
         np.timedelta64(1, 'Y')
     )
     file_dates = utils.decompose_datetime64(file_dates)
