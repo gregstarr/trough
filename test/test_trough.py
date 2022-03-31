@@ -207,7 +207,7 @@ def test_process_trough_interval(dates):
                          ])
 def test_script(dates):
     start_date, end_date = dates
-    n_times = (end_date - start_date) / timedelta(hours=1)
+    n_times = 1 + ((end_date - start_date) / timedelta(hours=1))
     with TemporaryDirectory() as tempdir:
         with config.temp_config(base_dir=tempdir):
             scripts.full_run(*dates)
@@ -215,5 +215,7 @@ def test_script(dates):
             assert n_files == (end_date.year - start_date.year + 1) * 2
             data = get_data(start_date, end_date, 'north')
             data.load()
-            assert data.time.shape[0] == n_times
-            data.close()
+            try:
+                assert data.time.shape[0] == n_times
+            finally:
+                data.close()
