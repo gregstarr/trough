@@ -215,7 +215,5 @@ def test_script(dates):
             assert n_files == (end_date.year - start_date.year + 1) * 2
             data = get_data(start_date, end_date, 'north')
             data.load()
-            try:
-                assert data.time.shape[0] == n_times
-            finally:
-                data.close()
+            assert data.time.shape[0] == n_times
+            data.close()

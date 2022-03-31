@@ -287,6 +287,8 @@ def label_trough_dataset(start_date, end_date, params=None, tec_dir=None, arb_di
                 start = max(start_date, start)
                 end = min(end_date, end)
                 data = label_trough_interval(start, end, params, hemisphere, tec_dir, arb_dir, omni_file)
+                if end.year == start.year + 1:
+                    data = data.isel(time=slice(0, -1))
                 labels.append(data['labels'])
                 scores.append(data['score'])
                 start += timedelta(days=1)
