@@ -38,8 +38,9 @@ jobs:
       run: |
         conda install pytest
         pip install pytest-html
+        pip install pytest-cov
         pip install -e .
-        pytest test --html=${{ matrix.python-version }}-results.html --self-contained-html
+        pytest test --html=${{ matrix.python-version }}-results.html --self-contained-html --cov=./ --cov-report=xml
     - name: Move artifacts
       shell: bash -l {0}
       run: mv test.log ${{ matrix.python-version }}-test.log
@@ -51,3 +52,5 @@ jobs:
         path: |
           ${{ matrix.python-version }}-results.html
           ${{ matrix.python-version }}-test.log
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v2
