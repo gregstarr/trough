@@ -181,7 +181,7 @@ def process_tec_dataset(start_date, end_date, download_dir=None, process_dir=Non
             start = datetime(year, month, 1)
             end = datetime(year, month + 1, 1) if month < 12 else datetime(year + 1, 1, 1)
             logger.info(f"tec interval {start=} {end=}")
-            if start > end_date or end <= start_date:
+            if start >= end_date or end <= start_date:
                 continue
             start = max(start_date, start)
             end = min(end_date, end)
