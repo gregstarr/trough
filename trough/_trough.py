@@ -26,8 +26,11 @@ def get_model(tec_data, omni_file):
     """Get magnetic latitudes of the trough according to the model in Deminov 2017
     for a specific time and set of magnetic local times.
     """
+    logger.info("getting model")
     omni_data = xr.open_dataset(omni_file)
+    logger.info(f"{omni_data.time.values[0]=} {omni_data.time.values[-1]=}")
     kp = _get_weighted_kp(tec_data.time, omni_data)
+    logger.info(f"{kp.time.values[0]=} {kp.time.values[-1]=}")
     apex = Apex(date=utils.datetime64_to_datetime(tec_data.time.values[0]))
     mlat = 65.5 * np.ones((tec_data.time.shape[0], tec_data.mlt.shape[0]))
     for i in range(10):
@@ -61,6 +64,7 @@ def _model_subroutine_lat(mlt, glon, kp):
 def _get_weighted_kp(times, omni_data, tau=.6, T=10):
     """Get a weighed sum of kp values over time. See paper for details.
     """
+    logger.info(f"_get_weighted_kp {times[0]=} {times[-1]=}")
     ap = omni_data.sel(time=slice(times[0] - np.timedelta64(T, 'h'), times[-1]))['ap'].values
     prehistory = np.column_stack([ap[T - i:ap.shape[0] - i] for i in range(T)])
     weight_factors = tau ** np.arange(T)
@@ -86,6 +90,7 @@ def estimate_background(tec, patch_shape):
 
 
 def preprocess_interval(data, min_val=0, max_val=100, bg_est_shape=(1, 15, 15)):
+    logger.info("preprocessing interval")
     tec = data['tec'].values
     # throw away outlier values
     tec[tec > max_val] = np.nan

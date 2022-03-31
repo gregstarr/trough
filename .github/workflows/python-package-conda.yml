@@ -54,3 +54,4 @@ jobs:
           ${{ matrix.python-version }}-test.log
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v2
+      if: always()
