@@ -13,8 +13,8 @@ try:
     import pandas
     from skimage import measure, morphology
     from sklearn.metrics.pairwise import rbf_kernel
-except ImportError as e:
-    warnings.warn(f"Packages required for recreating dataset not installed: {e}")
+except ImportError as imp_err:
+    warnings.warn(f"Packages required for recreating dataset not installed: {imp_err}")
 
 from trough import config, utils, _tec, _arb
 
@@ -183,6 +183,8 @@ def get_optimization_args(data, model_weight_max, rbf_bw, tv_hw, tv_vw, l2_weigh
         l2 = (model_weight_max - 1) * l2 / l2.max() + 1
         l2 *= l2_weight
         fin_mask = np.isfinite(np.ravel(data['x'].isel(time=i)))
+        if not fin_mask.any():
+            raise Exception("WHY ALL NAN??")
         args = (cp.Variable(data.mlat.shape[0] * data.mlt.shape[0]), basis[fin_mask, :],
                 np.ravel(data['x'].isel(time=i))[fin_mask], tv, np.ravel(l2))
         all_args.append(args)

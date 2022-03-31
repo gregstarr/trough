@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 import warnings
 try:
     import h5py
-except ImportError as e:
-    warnings.warn(f"Packages required for recreating dataset not installed: {e}")
+except ImportError as imp_err:
+    warnings.warn(f"Packages required for recreating dataset not installed: {imp_err}")
 
 from trough import config, utils
 from trough.exceptions import InvalidProcessDates
@@ -156,18 +156,7 @@ def process_interval(start_date, end_date, output_fn, input_dir, sample_dt, mlat
     tec.to_netcdf(output_fn)
 
 
-def check_processed_data_interval(start, end, processed_file):
-    if processed_file.exists():
-        logger.info(f"processed file already exists {processed_file=}, checking...")
-        try:
-            data_check = get_tec_data(start, end, processed_file.parent)
-            if not data_check.isnull().all(dim=['mlt', 'mlat']).any().item():
-                logger.info(f"downloaded data already processed {processed_file=}, checking...")
-                return False
-        except Exception as e:
-            logger.info(f"error reading processed file {processed_file=}: {e}, removing and reprocessing")
-            processed_file.unlink()
-    return True
+check_processed_data_interval = utils.get_data_checker(get_tec_data)
 
 
 def process_tec_dataset(start_date, end_date, download_dir=None, process_dir=None, dt=None, mlat_bins=None,
@@ -184,14 +173,18 @@ def process_tec_dataset(start_date, end_date, download_dir=None, process_dir=Non
         dt = np.timedelta64(1, 'h')
     Path(process_dir).mkdir(exist_ok=True, parents=True)
 
+    logger.info(f"processing tec dataset over interval {start_date=} {end_date=}")
     for year in range(start_date.year, end_date.year + 1):
+        logger.info(f"tec year {year=}")
         for month in range(1, 13):
             output_file = Path(process_dir) / f"tec_{year:04d}_{month:02d}.nc"
             start = datetime(year, month, 1)
             end = datetime(year, month + 1, 1) if month < 12 else datetime(year + 1, 1, 1)
-            if start >= end_date or end <= start_date:
+            logger.info(f"tec interval {start=} {end=}")
+            if start > end_date or end <= start_date:
                 continue
             start = max(start_date, start)
             end = min(end_date, end)
-            if check_processed_data_interval(start, end, output_file):
+            logger.info(f"reduced tec interval {start=} {end=}")
+            if check_processed_data_interval(start, end, dt, output_file):
                 process_interval(start, end, output_file, download_dir, dt, mlat_bins, mlt_bins)

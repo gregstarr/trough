@@ -201,4 +201,6 @@ def test_script(dates):
             n_files = len([p for p in Path(config.processed_labels_dir).glob('labels*.nc')])
             assert n_files == (end_date.year - start_date.year + 1)
             data = get_data(start_date, end_date)
+            data.load()
             assert data.time.shape[0] == n_times
+            data.close()

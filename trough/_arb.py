@@ -9,8 +9,8 @@ import warnings
 
 try:
     import h5py
-except ImportError as e:
-    warnings.warn(f"Packages required for recreating dataset not installed: {e}")
+except ImportError as imp_err:
+    warnings.warn(f"Packages required for recreating dataset not installed: {imp_err}")
 
 from trough import config, utils
 from trough.exceptions import InvalidProcessDates
@@ -109,18 +109,7 @@ def process_interval(start_date, end_date, output_fn, input_dir, mlt_vals, sampl
     data.to_netcdf(output_fn)
 
 
-def check_processed_data_interval(start, end, processed_file):
-    if processed_file.exists():
-        logger.info(f"processed file already exists {processed_file=}, checking...")
-        try:
-            data_check = get_arb_data(start, end, processed_file.parent)
-            if not data_check.isnull().all(dim=['mlt']).any().item():
-                logger.info(f"downloaded data already processed {processed_file=}, checking...")
-                return False
-        except Exception as e:
-            logger.info(f"error reading processed file {processed_file=}: {e}, removing and reprocessing")
-            processed_file.unlink()
-    return True
+check_processed_data_interval = utils.get_data_checker(get_arb_data)
 
 
 def process_auroral_boundary_dataset(start_date, end_date, download_dir=None, process_dir=None, mlt_vals=None, dt=None):
@@ -140,5 +129,5 @@ def process_auroral_boundary_dataset(start_date, end_date, download_dir=None, pr
         end = min(end_date, datetime(year + 1, 1, 1))
         if end - start <= timedelta(hours=1):
             continue
-        if check_processed_data_interval(start, end, output_file):
+        if check_processed_data_interval(start, end, dt, output_file):
             process_interval(start, end, output_file, download_dir, mlt_vals, dt)

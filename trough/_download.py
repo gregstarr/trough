@@ -15,8 +15,8 @@ try:
     import h5py
     from madrigalWeb import madrigalWeb
     import bs4
-except ImportError as e:
-    warnings.warn(f"Packages required for recreating dataset not installed: {e}")
+except ImportError as imp_err:
+    warnings.warn(f"Packages required for recreating dataset not installed: {imp_err}")
 
 
 from trough.exceptions import InvalidConfiguration
