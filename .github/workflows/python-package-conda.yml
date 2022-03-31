@@ -2,6 +2,9 @@ name: Python Package using Conda
 
 on: [push]
 
+env:
+  CODECOV_TOKEN: 5454ef86-3f2b-45a7-8df0-636d3044ae13
+
 jobs:
   build-linux:
     runs-on: ubuntu-latest
