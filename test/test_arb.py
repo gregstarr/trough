@@ -79,7 +79,7 @@ def test_process_arb(download_dir, processed_dir, test_dates, dt, mlt_vals):
     processed_file = Path(processed_dir) / 'arb_test.nc'
     process_interval(start, end, 'north', processed_file, download_dir, mlt_vals, dt)
     assert processed_file.exists()
-    data = xr.open_dataset(processed_file)
+    data = xr.open_dataarray(processed_file)
     assert data.shape == (correct_times.shape[0], mlt_vals.shape[0])
     assert (data.mlt == mlt_vals).all().item()
     assert (data.time == correct_times).all().item()
