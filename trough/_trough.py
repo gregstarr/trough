@@ -131,7 +131,7 @@ def remove_auroral(data, hemisphere, offset=3):
     if hemisphere == 'north':
         data['labels'] *= data.mlat < (data['arb'] + offset)
     elif hemisphere == 'south':
-        data['labels'] *= data.mlat > (data['arb'] + offset)
+        data['labels'] *= data.mlat > (data['arb'] - offset)
     else:
         raise ValueError(f"Invalid hemisphere: {hemisphere}, valid = ['north', 'south']")
 
@@ -238,7 +238,7 @@ def label_trough_interval(start_date, end_date, params, hemisphere, tec_dir, arb
     data = _tec.get_tec_data(start_date, end_date, hemisphere, tec_dir).to_dataset(name='tec')
     preprocess_interval(data, bg_est_shape=params.bg_est_shape)
 
-    data = data.merge(_arb.get_arb_data(start_date, end_date, hemisphere, arb_dir))
+    data['arb'] = _arb.get_arb_data(start_date, end_date, hemisphere, arb_dir)
     get_model(data, hemisphere, omni_file)
     args = get_optimization_args(data, params.model_weight_max, params.rbf_bw, params.tv_hw, params.tv_vw,
                                  params.l2_weight, params.tv_weight)

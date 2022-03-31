@@ -77,15 +77,21 @@ def get_tec_data(start_date, end_date, hemisphere, processed_dir=None):
     return data.sel(time=slice(start_date, end_date))
 
 
-def calculate_bins(data, mlat_bins, mlt_bins):
+def calculate_bins(data, mlat_bins, mlt_bins, hemisphere):
     """Calculates TEC in MLAT - MLT bins. Executed in process pool.
     """
     if data.shape == ():
         tec = np.ones((mlat_bins.shape[0] - 1, mlt_bins.shape[0] - 1)) * np.nan
     else:
-        mask = np.isfinite(data.values)
+        if hemisphere == 'north':
+            mlat_grid = np.broadcast_to(data.mlat, data.shape)
+        elif hemisphere == 'south':
+            mlat_grid = np.broadcast_to(data.mlat, data.shape) * -1
+        else:
+            raise ValueError(f"Invalid hemisphere: {hemisphere}, valid = ['north', 'south']")
+        mask = np.isfinite(data.values) & (mlat_grid >= 0)
         tec = binned_statistic_2d(
-            np.broadcast_to(data.mlat, data.shape)[mask],
+            mlat_grid[mask],
             data.mlt.values[mask],
             data.values[mask],
             statistic='mean',
@@ -123,12 +129,7 @@ def process_interval(start_date, end_date, hemisphere, output_fn, input_dir, sam
     """Processes an interval of madrigal data and writes to files.
     """
     logger.info(f"processing tec data for {start_date, end_date}")
-    if hemisphere == 'north':
-        calc_bins = functools.partial(calculate_bins, mlat_bins=mlat_bins, mlt_bins=mlt_bins)
-    elif hemisphere == 'south':
-        calc_bins = functools.partial(calculate_bins, mlat_bins=-1 * mlat_bins, mlt_bins=mlt_bins)
-    else:
-        raise ValueError(f"Invalid hemisphere: {hemisphere}, valid = ['north', 'south']")
+    calc_bins = functools.partial(calculate_bins, mlat_bins=mlat_bins, mlt_bins=mlt_bins, hemisphere=hemisphere)
     ref_times = np.arange(np.datetime64(start_date, 's'), np.datetime64(end_date, 's'), sample_dt)
     logger.info(f"ref times: {ref_times.shape}, {ref_times[0]=}, {ref_times[-1]=}")
     mad_data = _get_downloaded_tec_data(start_date, end_date, input_dir)
@@ -149,11 +150,12 @@ def process_interval(start_date, end_date, hemisphere, output_fn, input_dir, sam
     data_groups = mad_data.groupby_bins('time', bins=time_bins, right=False)
     data = [_data for _interval, _data in data_groups]
     logger.info("Calculated bins")
+    h = 1 if hemisphere == 'north' else -1
     tec = xr.DataArray(
         np.array([result for result in map(calc_bins, data)]),
         coords={
             'time': np.array([_interval.left for _interval, _data in data_groups]),
-            'mlat': (mlat_bins[:-1] + mlat_bins[1:]) / 2,
+            'mlat': h * (mlat_bins[:-1] + mlat_bins[1:]) / 2,
             'mlt': (mlt_bins[:-1] + mlt_bins[1:]) / 2,
         },
         dims=['time', 'mlat', 'mlt']

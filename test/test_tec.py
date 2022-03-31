@@ -33,7 +33,35 @@ def test_calculate_bins():
         dims=['time', 'x', 'y']
     )
     be = np.array([-.5, 4.5, 9.5])
-    out_tec = calculate_bins(data, be, be)
+    out_tec = calculate_bins(data, be, be, 'north')
+    assert out_tec.shape == (2, 2)
+    assert out_tec[0, 0] == 10 / 25
+    assert out_tec[0, 1] == 20 / 25
+    assert out_tec[1, 0] == 30 / 25
+    assert out_tec[1, 1] == 0
+
+
+def test_calculate_bins_south():
+    mlat = np.arange(10)[:, None] * np.ones((1, 10)) * -1
+    mlt = np.arange(10)[None, None, :] * np.ones((1, 10, 1))
+    tec = np.zeros((1, 10, 10))
+    tec[0, 0, 0] = 10
+    tec[0, 0, -1] = 20
+    tec[0, -1, 0] = 30
+    times = np.ones(1) * np.nan
+    data = xr.DataArray(
+        tec,
+        coords={
+            'time': times,
+            'x': np.arange(10),
+            'y': np.arange(10),
+            'mlat': (('x', 'y'), mlat),
+            'mlt': (('time', 'x', 'y'), mlt)
+        },
+        dims=['time', 'x', 'y']
+    )
+    be = np.array([-.5, 4.5, 9.5])
+    out_tec = calculate_bins(data, be, be, 'south')
     assert out_tec.shape == (2, 2)
     assert out_tec[0, 0] == 10 / 25
     assert out_tec[0, 1] == 20 / 25
@@ -104,13 +132,18 @@ def test_process_tec(download_dir, process_dir, test_dates, dt, mlt_bins, mlat_b
     mlt_vals = (mlt_bins[:-1] + mlt_bins[1:]) / 2
     mlat_vals = (mlat_bins[:-1] + mlat_bins[1:]) / 2
     processed_file = Path(process_dir) / 'tec_test.nc'
-    process_interval(start, end, 'north', processed_file, download_dir, dt, mlat_bins, mlt_bins)
-    assert processed_file.exists()
-    data = xr.open_dataarray(processed_file)
-    assert data.shape == (correct_times.shape[0], mlat_vals.shape[0], mlt_vals.shape[0])
-    assert (data.mlt == mlt_vals).all().item()
-    assert (data.mlat == mlat_vals).all().item()
-    assert (data.time == correct_times).all().item()
+    for hemisphere in ['north', 'south']:
+        process_interval(start, end, hemisphere, processed_file, download_dir, dt, mlat_bins, mlt_bins)
+        assert processed_file.exists()
+        data = xr.open_dataarray(processed_file)
+        data.load()
+        h = 1 if hemisphere == 'north' else -1
+        assert data.shape == (correct_times.shape[0], mlat_vals.shape[0], mlt_vals.shape[0])
+        assert (data.mlt == mlt_vals).all().item()
+        assert (data.mlat == h * mlat_vals).all().item()
+        assert (data.time == correct_times).all().item()
+        data.close()
+        processed_file.unlink()
 
 
 def test_process_tec_out_of_range(download_dir, process_dir, test_dates):
@@ -129,13 +162,15 @@ def test_get_tec_data(download_dir, process_dir, test_dates):
     mlt_vals = (mlt_bins[:-1] + mlt_bins[1:]) / 2
     mlat_vals = (mlat_bins[:-1] + mlat_bins[1:]) / 2
     correct_times = np.arange(np.datetime64(start), np.datetime64(end), dt)
-    processed_file = get_tec_paths(start, end, 'north', process_dir)[0]
-    process_interval(start, end, 'north', processed_file, download_dir, dt, mlat_bins, mlt_bins)
-    data = get_tec_data(start, end, 'north', process_dir)
-    assert data.shape == (correct_times.shape[0], mlat_vals.shape[0], mlt_vals.shape[0])
-    assert (data.mlt == mlt_vals).all().item()
-    assert (data.mlat == mlat_vals).all().item()
-    assert (data.time == correct_times).all().item()
+    for hemisphere in ['north', 'south']:
+        processed_file = get_tec_paths(start, end, hemisphere, process_dir)[0]
+        process_interval(start, end, hemisphere, processed_file, download_dir, dt, mlat_bins, mlt_bins)
+        data = get_tec_data(start, end, hemisphere, process_dir)
+        h = 1 if hemisphere == 'north' else -1
+        assert data.shape == (correct_times.shape[0], mlat_vals.shape[0], mlt_vals.shape[0])
+        assert (data.mlt == mlt_vals).all().item()
+        assert (data.mlat == h * mlat_vals).all().item()
+        assert (data.time == correct_times).all().item()
 
 
 def test_scripts(test_dates):
@@ -149,13 +184,16 @@ def test_scripts(test_dates):
             assert data.time.values[0] < np.datetime64(test_dates[0], 's')
             assert data.time.values[-1] > np.datetime64(test_dates[-1], 's')
             scripts.process_tec(start, end)
-            data = get_tec_data(start, end, 'north', cfg.processed_tec_dir)
-            data.load()
-            dt = np.timedelta64(1, 'h')
-            mlt_vals = config.get_mlt_vals()
-            mlat_vals = config.get_mlat_vals()
-            correct_times = np.arange(np.datetime64(test_dates[0]), np.datetime64(test_dates[-1]), dt)
-            assert data.shape == (correct_times.shape[0], mlat_vals.shape[0], mlt_vals.shape[0])
-            assert (data.mlt == mlt_vals).all().item()
-            assert (data.mlat == mlat_vals).all().item()
-            assert (data.time == correct_times).all().item()
+
+            for hemisphere in ['north', 'south']:
+                data = get_tec_data(start, end, hemisphere, cfg.processed_tec_dir)
+                data.load()
+                dt = np.timedelta64(1, 'h')
+                mlt_vals = config.get_mlt_vals()
+                mlat_vals = config.get_mlat_vals()
+                correct_times = np.arange(np.datetime64(test_dates[0]), np.datetime64(test_dates[-1]), dt)
+                h = 1 if hemisphere == 'north' else -1
+                assert data.shape == (correct_times.shape[0], mlat_vals.shape[0], mlt_vals.shape[0])
+                assert (data.mlt == mlt_vals).all().item()
+                assert (data.mlat == h * mlat_vals).all().item()
+                assert (data.time == correct_times).all().item()

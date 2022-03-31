@@ -90,7 +90,7 @@ def test_postprocess():
             coords=coords,
             dims=['time', 'mlat', 'mlt']
         ),
-        'arb_north': xr.DataArray(
+        'arb': xr.DataArray(
             arb,
             coords={'time': [0], 'mlt': config.get_mlt_vals()},
             dims=['time', 'mlt']
@@ -157,16 +157,21 @@ def test_get_tec_troughs():
     with config.temp_config(trough_id_params=params):
         scripts.download_all(start_date, end_date)
         scripts.process_all(start_date, end_date)
-        data = _trough.label_trough_interval(
+        data_north = _trough.label_trough_interval(
             start_date, end_date, config.trough_id_params, 'north',
             config.processed_tec_dir, config.processed_arb_dir, config.processed_omni_file
         )
+        data_south = _trough.label_trough_interval(
+            start_date, end_date, config.trough_id_params, 'south',
+            config.processed_tec_dir, config.processed_arb_dir, config.processed_omni_file
+        )
 
-    labels = data['labels'].values
+    labels = data_north['labels'].values
     assert labels.shape == (12, 60, 180)
     assert labels[1, 20:30, 60:120].mean() > .5
     for i in range(12):
-        assert labels[i][(data.mlat > data['arb_north'][i] + 3).values].sum() == 0
+        assert labels[i][(data_north.mlat > data_north['arb'][i] + 3).values].sum() == 0
+        assert labels[i][(data_south.mlat < data_north['arb'][i] - 3).values].sum() == 0
 
 
 @pytest.mark.parametrize('dates',
