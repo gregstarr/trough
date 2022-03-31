@@ -60,20 +60,20 @@ def open_madrigal_file(fn):
     )
 
 
-def get_tec_paths(start_date, end_date, processed_dir):
+def get_tec_paths(start_date, end_date, hemisphere, processed_dir):
     file_dates = np.arange(
         np.datetime64(start_date, 'M'),
         (np.datetime64(end_date, 's') - np.timedelta64(1, 'h')).astype('datetime64[M]') + 1,
         np.timedelta64(1, 'M')
     )
     file_dates = utils.decompose_datetime64(file_dates)
-    return [Path(processed_dir) / f"tec_{d[0]:04d}_{d[1]:02d}.nc" for d in file_dates]
+    return [Path(processed_dir) / f"tec_{hemisphere}_{d[0]:04d}_{d[1]:02d}.nc" for d in file_dates]
 
 
-def get_tec_data(start_date, end_date, processed_dir=None):
+def get_tec_data(start_date, end_date, hemisphere, processed_dir=None):
     if processed_dir is None:
         processed_dir = config.processed_tec_dir
-    data = xr.concat([xr.open_dataarray(file) for file in get_tec_paths(start_date, end_date, processed_dir)], 'time')
+    data = xr.concat([xr.open_dataarray(file) for file in get_tec_paths(start_date, end_date, hemisphere, processed_dir)], 'time')
     return data.sel(time=slice(start_date, end_date))
 
 
@@ -119,11 +119,16 @@ def get_mag_coords(apex, mad_data):
     )
 
 
-def process_interval(start_date, end_date, output_fn, input_dir, sample_dt, mlat_bins, mlt_bins):
+def process_interval(start_date, end_date, hemisphere, output_fn, input_dir, sample_dt, mlat_bins, mlt_bins):
     """Processes an interval of madrigal data and writes to files.
     """
     logger.info(f"processing tec data for {start_date, end_date}")
-    calc_bins = functools.partial(calculate_bins, mlat_bins=mlat_bins, mlt_bins=mlt_bins)
+    if hemisphere == 'north':
+        calc_bins = functools.partial(calculate_bins, mlat_bins=mlat_bins, mlt_bins=mlt_bins)
+    elif hemisphere == 'south':
+        calc_bins = functools.partial(calculate_bins, mlat_bins=-1 * mlat_bins, mlt_bins=mlt_bins)
+    else:
+        raise ValueError(f"Invalid hemisphere: {hemisphere}, valid = ['north', 'south']")
     ref_times = np.arange(np.datetime64(start_date, 's'), np.datetime64(end_date, 's'), sample_dt)
     logger.info(f"ref times: {ref_times.shape}, {ref_times[0]=}, {ref_times[-1]=}")
     mad_data = _get_downloaded_tec_data(start_date, end_date, input_dir)
@@ -177,14 +182,15 @@ def process_tec_dataset(start_date, end_date, download_dir=None, process_dir=Non
     for year in range(start_date.year, end_date.year + 1):
         logger.info(f"tec year {year=}")
         for month in range(1, 13):
-            output_file = Path(process_dir) / f"tec_{year:04d}_{month:02d}.nc"
             start = datetime(year, month, 1)
             end = datetime(year, month + 1, 1) if month < 12 else datetime(year + 1, 1, 1)
             logger.info(f"tec interval {start=} {end=}")
             if start >= end_date or end <= start_date:
                 continue
-            start = max(start_date, start)
-            end = min(end_date, end)
-            logger.info(f"reduced tec interval {start=} {end=}")
-            if check_processed_data_interval(start, end, dt, output_file):
-                process_interval(start, end, output_file, download_dir, dt, mlat_bins, mlt_bins)
+            for hemisphere in ['north', 'south']:
+                output_file = Path(process_dir) / f"tec_{hemisphere}_{year:04d}_{month:02d}.nc"
+                start = max(start_date, start)
+                end = min(end_date, end)
+                logger.info(f"reduced tec interval {start=} {end=} {hemisphere=}")
+                if check_processed_data_interval(start, end, dt, hemisphere, output_file):
+                    process_interval(start, end, hemisphere, output_file, download_dir, dt, mlat_bins, mlt_bins)

@@ -96,7 +96,7 @@ def test_postprocess():
             dims=['time', 'mlt']
         ),
     })
-    _trough.postprocess(data, perimeter_th=50)
+    _trough.postprocess(data, 'north', perimeter_th=50)
     labels = data['labels'].values[0]
     assert labels[good_labels].all()
     assert not labels[small_reject].any()
@@ -157,8 +157,10 @@ def test_get_tec_troughs():
     with config.temp_config(trough_id_params=params):
         scripts.download_all(start_date, end_date)
         scripts.process_all(start_date, end_date)
-        data = _trough.label_trough_interval(start_date, end_date, config.trough_id_params, config.processed_tec_dir,
-                                             config.processed_arb_dir, config.processed_omni_file)
+        data = _trough.label_trough_interval(
+            start_date, end_date, config.trough_id_params, 'north',
+            config.processed_tec_dir, config.processed_arb_dir, config.processed_omni_file
+        )
 
     labels = data['labels'].values
     assert labels.shape == (12, 60, 180)
@@ -177,8 +179,10 @@ def test_process_trough_interval(dates):
     n_times = (end_date - start_date) / timedelta(hours=1)
     scripts.download_all(start_date, end_date)
     scripts.process_all(start_date, end_date)
-    data = _trough.label_trough_interval(start_date, end_date, config.trough_id_params, config.processed_tec_dir,
-                                         config.processed_arb_dir, config.processed_omni_file)
+    data = _trough.label_trough_interval(
+        start_date, end_date, config.trough_id_params, 'north',
+        config.processed_tec_dir, config.processed_arb_dir, config.processed_omni_file
+    )
     assert 'labels' in data
     assert 'tec' in data
     assert data.time.shape[0] == n_times
@@ -200,7 +204,7 @@ def test_script(dates):
             scripts.full_run(*dates)
             n_files = len([p for p in Path(config.processed_labels_dir).glob('labels*.nc')])
             assert n_files == (end_date.year - start_date.year + 1)
-            data = get_data(start_date, end_date)
+            data = get_data(start_date, end_date, 'north')
             data.load()
             assert data.time.shape[0] == n_times
             data.close()

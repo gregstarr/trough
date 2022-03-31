@@ -1,5 +1,6 @@
 # trough
 [![Python Package using Conda](https://github.com/gregstarr/trough/actions/workflows/python-package-conda.yml/badge.svg)](https://github.com/gregstarr/trough/actions/workflows/python-package-conda.yml)
+[![codecov](https://codecov.io/gh/gregstarr/trough/branch/master/graph/badge.svg?token=QNCESQ41EW)](https://codecov.io/gh/gregstarr/trough)
 
 ![GitHub](https://img.shields.io/github/license/gregstarr/trough)
 ![GitHub last commit](https://img.shields.io/github/last-commit/gregstarr/trough?color=blue&style=flat)

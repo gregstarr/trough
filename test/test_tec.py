@@ -104,7 +104,7 @@ def test_process_tec(download_dir, process_dir, test_dates, dt, mlt_bins, mlat_b
     mlt_vals = (mlt_bins[:-1] + mlt_bins[1:]) / 2
     mlat_vals = (mlat_bins[:-1] + mlat_bins[1:]) / 2
     processed_file = Path(process_dir) / 'tec_test.nc'
-    process_interval(start, end, processed_file, download_dir, dt, mlat_bins, mlt_bins)
+    process_interval(start, end, 'north', processed_file, download_dir, dt, mlat_bins, mlt_bins)
     assert processed_file.exists()
     data = xr.open_dataarray(processed_file)
     assert data.shape == (correct_times.shape[0], mlat_vals.shape[0], mlt_vals.shape[0])
@@ -118,7 +118,7 @@ def test_process_tec_out_of_range(download_dir, process_dir, test_dates):
     start, end = [date - timedelta(days=100) for date in test_dates]
     processed_file = Path(process_dir) / 'tec_test.nc'
     with pytest.raises(InvalidProcessDates):
-        process_interval(start, end, processed_file, download_dir, dt, config.get_mlat_bins(), config.get_mlt_bins())
+        process_interval(start, end, 'north', processed_file, download_dir, dt, config.get_mlat_bins(), config.get_mlt_bins())
 
 
 def test_get_tec_data(download_dir, process_dir, test_dates):
@@ -129,9 +129,9 @@ def test_get_tec_data(download_dir, process_dir, test_dates):
     mlt_vals = (mlt_bins[:-1] + mlt_bins[1:]) / 2
     mlat_vals = (mlat_bins[:-1] + mlat_bins[1:]) / 2
     correct_times = np.arange(np.datetime64(start), np.datetime64(end), dt)
-    processed_file = get_tec_paths(start, end, process_dir)[0]
-    process_interval(start, end, processed_file, download_dir, dt, mlat_bins, mlt_bins)
-    data = get_tec_data(start, end, process_dir)
+    processed_file = get_tec_paths(start, end, 'north', process_dir)[0]
+    process_interval(start, end, 'north', processed_file, download_dir, dt, mlat_bins, mlt_bins)
+    data = get_tec_data(start, end, 'north', process_dir)
     assert data.shape == (correct_times.shape[0], mlat_vals.shape[0], mlt_vals.shape[0])
     assert (data.mlt == mlt_vals).all().item()
     assert (data.mlat == mlat_vals).all().item()
@@ -139,16 +139,17 @@ def test_get_tec_data(download_dir, process_dir, test_dates):
 
 
 def test_scripts(test_dates):
+    start, end = test_dates
     with TemporaryDirectory() as base_dir:
         with config.temp_config(base_dir=base_dir) as cfg:
-            scripts.download_tec(*test_dates)
+            scripts.download_tec(start, end)
             tec_files = list(Path(cfg.download_tec_dir).glob('*'))
             assert len(tec_files) > 0
-            data = _get_downloaded_tec_data(*test_dates, cfg.download_tec_dir)
+            data = _get_downloaded_tec_data(start, end, cfg.download_tec_dir)
             assert data.time.values[0] < np.datetime64(test_dates[0], 's')
             assert data.time.values[-1] > np.datetime64(test_dates[-1], 's')
-            scripts.process_tec(*test_dates)
-            data = get_tec_data(*test_dates, cfg.processed_tec_dir)
+            scripts.process_tec(start, end)
+            data = get_tec_data(start, end, 'north', cfg.processed_tec_dir)
             data.load()
             dt = np.timedelta64(1, 'h')
             mlt_vals = config.get_mlt_vals()

@@ -134,12 +134,12 @@ def write_h5(fn, **kwargs):
 
 def get_data_checker(data_getter):
 
-    def check(start, end, dt, processed_file):
+    def check(start, end, dt, hemisphere, processed_file):
         times = np.arange(np.datetime64(start), np.datetime64(end), dt).astype('datetime64[s]')
         if processed_file.exists():
             logger.info(f"processed file already exists {processed_file=}, checking...")
             try:
-                data_check = data_getter(start, end, processed_file.parent)
+                data_check = data_getter(start, end, hemisphere, processed_file.parent)
                 data_check = data_check.sel(time=times)
                 has_missing_data = data_check.isnull().all(axis=[i for i in range(1, data_check.ndim)]).any()
                 if not has_missing_data:
