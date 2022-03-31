@@ -36,7 +36,7 @@ def get_arb_paths(start_date, end_date, hemisphere, processed_dir):
 def get_arb_data(start_date, end_date, hemisphere, processed_dir=None):
     if processed_dir is None:
         processed_dir = config.processed_arb_dir
-    data = xr.concat([xr.open_dataset(file) for file in get_arb_paths(start_date, end_date, hemisphere, processed_dir)], 'time')
+    data = xr.concat([xr.open_dataarray(file) for file in get_arb_paths(start_date, end_date, hemisphere, processed_dir)], 'time')
     return data.sel(time=slice(start_date, end_date))
 
 
