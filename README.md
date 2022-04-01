@@ -5,7 +5,6 @@
 ![GitHub](https://img.shields.io/github/license/gregstarr/trough)
 ![GitHub last commit](https://img.shields.io/github/last-commit/gregstarr/trough?color=blue&style=flat)
 ![Lines of code](https://img.shields.io/tokei/lines/github/gregstarr/trough?color=orange)
-![GitHub Repo stars](https://img.shields.io/github/stars/gregstarr/trough?style=social)
 
 ### Example
 
