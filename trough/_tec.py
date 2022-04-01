@@ -94,7 +94,7 @@ def calculate_bins(data, mlat_bins, mlt_bins, hemisphere):
             mlat_grid[mask],
             data.mlt.values[mask],
             data.values[mask],
-            statistic='mean',
+            statistic='median',
             bins=[mlat_bins, mlt_bins]
         ).statistic
     return tec
