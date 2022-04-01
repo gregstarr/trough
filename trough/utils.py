@@ -2,6 +2,7 @@ import numpy as np
 import datetime
 import warnings
 import logging
+import xarray as xr
 try:
     import h5py
     from skimage.util import view_as_windows
@@ -153,3 +154,20 @@ def get_data_checker(data_getter):
         return True
 
     return check
+
+
+def read_netcdfs(files, dim):
+    """https://xarray.pydata.org/en/stable/user-guide/io.html#reading-multi-file-datasets
+    """
+    def process_one_path(path):
+        # use a context manager, to ensure the file gets closed after use
+        with xr.open_dataarray(path) as ds:
+            # load all data from the transformed dataset, to ensure we can
+            # use it after closing each original file
+            ds.load()
+            return ds
+
+    paths = sorted(files)
+    datasets = [process_one_path(p) for p in paths]
+    combined = xr.concat(datasets, dim)
+    return combined

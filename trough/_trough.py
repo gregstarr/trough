@@ -33,11 +33,11 @@ def get_model(tec_data, hemisphere, omni_file):
     logger.info(f"{kp.shape=}")
     apex = Apex(date=utils.datetime64_to_datetime(tec_data.time.values[0]))
     mlat = 65.5 * np.ones((tec_data.time.shape[0], tec_data.mlt.shape[0]))
-    if hemisphere == 'south':
-        mlat = mlat * -1
     for i in range(10):
         glat, glon = apex.convert(mlat, tec_data.mlt.values[None, :], 'mlt', 'geo', 350, tec_data.time.values[:, None])
         mlat = _model_subroutine_lat(tec_data.mlt.values[None, :], glon, kp[:, None], hemisphere)
+    if hemisphere == 'south':
+        mlat = mlat * -1
     tec_data['model'] = xr.DataArray(
         mlat,
         coords={'time': tec_data.time, 'mlt': tec_data.mlt},
@@ -311,7 +311,7 @@ def get_label_paths(start_date, end_date, hemisphere, processed_dir):
 def get_trough_labels(start_date, end_date, hemisphere, labels_dir=None):
     if labels_dir is None:
         labels_dir = config.processed_labels_dir
-    data = xr.concat([xr.open_dataarray(file) for file in get_label_paths(start_date, end_date, hemisphere, labels_dir)], 'time')
+    data = utils.read_netcdfs(get_label_paths(start_date, end_date, hemisphere, labels_dir), 'time')
     return data.sel(time=slice(start_date, end_date))
 
 
