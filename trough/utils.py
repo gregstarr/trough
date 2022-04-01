@@ -1,11 +1,15 @@
 import numpy as np
 import datetime
 import warnings
+import logging
 try:
     import h5py
     from skimage.util import view_as_windows
-except ImportError as e:
-    warnings.warn(f"Packages required for recreating dataset not installed: {e}")
+except ImportError as imp_err:
+    warnings.warn(f"Packages required for recreating dataset not installed: {imp_err}")
+
+
+logger = logging.getLogger(__name__)
 
 
 def datetime64_to_datetime(dt64):
@@ -126,3 +130,26 @@ def write_h5(fn, **kwargs):
     with h5py.File(fn, 'w') as f:
         for key, value in kwargs.items():
             f.create_dataset(key, data=value)
+
+
+def get_data_checker(data_getter):
+
+    def check(start, end, dt, hemisphere, processed_file):
+        times = np.arange(np.datetime64(start), np.datetime64(end), dt).astype('datetime64[s]')
+        if processed_file.exists():
+            logger.info(f"processed file already exists {processed_file=}, checking...")
+            try:
+                data_check = data_getter(start, end, hemisphere, processed_file.parent)
+                data_check = data_check.sel(time=times)
+                has_missing_data = data_check.isnull().all(axis=[i for i in range(1, data_check.ndim)]).any()
+                if not has_missing_data:
+                    logger.info(f"downloaded data already processed {processed_file=}, checking...")
+                    return False
+            except KeyError:
+                logger.info(f"processed file doesn't have the requested data")
+            except Exception as e:
+                logger.info(f"error reading processed file {processed_file=}: {e}, removing and reprocessing")
+                processed_file.unlink()
+        return True
+
+    return check

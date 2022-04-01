@@ -14,13 +14,13 @@ from trough.exceptions import InvalidProcessDates
 
 
 def test_file_list():
-    start_date = datetime(2001, 1, 1, 12, 0, 0)
-    end_date = datetime(2001, 1, 2, 12, 0, 0)
+    start_date = datetime(2001, 1, 4, 12, 0, 0)
+    end_date = datetime(2001, 1, 5, 12, 0, 0)
     with TemporaryDirectory() as tempdir:
         cache_fn = Path(tempdir) / "file_list.json"
         cache = {}
         for sat in ['f16', 'f17', 'f18', 'f19']:
-            for doy in [1, 2]:
+            for doy in [3, 4, 5]:
                 cache_key = f"{sat}_{2001}_{doy}"
                 cache[cache_key] = [f'{cache_key}_file_1', f'{cache_key}_file_2']
                 with open(cache_fn, 'w') as f:
@@ -75,14 +75,18 @@ def test_download_arb(test_dates, download_dir):
 )
 def test_process_arb(download_dir, processed_dir, test_dates, dt, mlt_vals):
     start, end = test_dates
-    correct_times = np.arange(np.datetime64(start, 's'), np.datetime64(end, 's'), dt)
+    correct_times = np.arange(np.datetime64(start, 's'), np.datetime64(end, 's') + dt, dt)
     processed_file = Path(processed_dir) / 'arb_test.nc'
-    process_interval(start, end, processed_file, download_dir, mlt_vals, dt)
-    assert processed_file.exists()
-    data = xr.open_dataarray(processed_file)
-    assert data.shape == (correct_times.shape[0], mlt_vals.shape[0])
-    assert (data.mlt == mlt_vals).all().item()
-    assert (data.time == correct_times).all().item()
+    for hemisphere in ['north', 'south']:
+        process_interval(start, end, hemisphere, processed_file, download_dir, mlt_vals, dt)
+        assert processed_file.exists()
+        data = xr.open_dataarray(processed_file)
+        data.load()
+        assert data.shape == (correct_times.shape[0], mlt_vals.shape[0])
+        assert (data.mlt == mlt_vals).all().item()
+        assert (data.time == correct_times).all().item()
+        data.close()
+        processed_file.unlink()
 
 
 def test_process_arb_out_of_range(download_dir, processed_dir, test_dates):
@@ -90,37 +94,38 @@ def test_process_arb_out_of_range(download_dir, processed_dir, test_dates):
     start, end = [date - timedelta(days=100) for date in test_dates]
     processed_file = Path(processed_dir) / 'arb_test.nc'
     with pytest.raises(InvalidProcessDates):
-        process_interval(start, end, processed_file, download_dir, config.get_mlt_vals(), dt)
+        process_interval(start, end, 'north', processed_file, download_dir, config.get_mlt_vals(), dt)
 
 
 def test_get_arb_data(download_dir, processed_dir, test_dates):
     start, end = test_dates
     dt = np.timedelta64(1, 'h')
     mlt = config.get_mlt_vals()
-    correct_times = np.arange(np.datetime64(start), np.datetime64(end), dt)
-    processed_file = get_arb_paths(start, end, processed_dir)[0]
-    process_interval(start, end, processed_file, download_dir, mlt, dt)
-    data = get_arb_data(start, end, processed_dir)
+    correct_times = np.arange(np.datetime64(start), np.datetime64(end) + dt, dt)
+    processed_file = get_arb_paths(start, end, 'north', processed_dir)[0]
+    process_interval(start, end, 'north', processed_file, download_dir, mlt, dt)
+    data = get_arb_data(start, end, 'north', processed_dir)
     assert data.shape == (correct_times.shape[0], mlt.shape[0])
     assert (data.mlt == mlt).all().item()
     assert (data.time == correct_times).all().item()
 
 
 def test_scripts(test_dates):
+    start, end = test_dates
     with TemporaryDirectory() as base_dir:
         with config.temp_config(base_dir=base_dir) as cfg:
-            scripts.download_arb(*test_dates)
+            scripts.download_arb(start, end)
             arb_files = list(Path(cfg.download_arb_dir).glob('*'))
             assert len(arb_files) > 0
-            data, times = _get_downloaded_arb_data(*test_dates, cfg.download_arb_dir)
-            assert min(times) < test_dates[0]
-            assert max(times) > test_dates[-1]
-            scripts.process_arb(*test_dates)
-            data = get_arb_data(*test_dates, cfg.processed_arb_dir)
+            data, times = _get_downloaded_arb_data(start, end, cfg.download_arb_dir)
+            assert min(times) < start
+            assert max(times) > end
+            scripts.process_arb(start, end)
+            data = get_arb_data(start, end, 'north', cfg.processed_arb_dir)
             data.load()
             dt = np.timedelta64(1, 'h')
             mlt = config.get_mlt_vals()
-            correct_times = np.arange(np.datetime64(test_dates[0]), np.datetime64(test_dates[-1]), dt)
+            correct_times = np.arange(np.datetime64(test_dates[0]), np.datetime64(test_dates[-1]) + dt, dt)
             assert data.shape == (correct_times.shape[0], mlt.shape[0])
             assert (data.mlt == mlt).all().item()
             assert (data.time == correct_times).all().item()

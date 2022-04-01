@@ -84,6 +84,7 @@ class Config:
         self.lon_res = 2
         self.time_res_unit = 'h'
         self.time_res_n = 1
+        self.mlat_min = 30
 
         self.script_name = 'full_run'
         self.start_date = None
@@ -99,10 +100,10 @@ class Config:
         return f"{cfg['script_name']}_{cfg['start_date']}_{cfg['end_date']}_config.json"
 
     def get_mlat_bins(self):
-        return np.arange(29.5, 90, self.lat_res)
+        return np.arange(self.mlat_min - self.lat_res / 2, 90, self.lat_res)
 
     def get_mlat_vals(self):
-        return np.arange(29.5 + self.lat_res / 2, 90, self.lat_res)
+        return np.arange(self.mlat_min, 90, self.lat_res)
 
     def get_mlt_bins(self):
         return np.arange(-12, 12 + 24 / 360, self.lon_res * 24 / 360)

@@ -74,28 +74,6 @@ def label_trough(start_date, end_date):
     _trough.label_trough_dataset(start_date, end_date)
 
 
-def _tec_interval_check(start, end):
-    try:
-        data_check = _tec.get_tec_data(start, end)
-        if not data_check.isnull().all(dim=['mlt', 'mlat']).any().item():
-            logger.info(f"tec data already processed {start=}, {end=}")
-            return False
-    except Exception as e:
-        logger.info(f"error getting data {start=}, {end=}: {e}, reprocessing")
-    return True
-
-
-def _arb_interval_check(start, end):
-    try:
-        data_check = _arb.get_arb_data(start, end)
-        if not data_check.isnull().all(dim=['mlt']).any().item():
-            logger.info(f"arb data already processed {start=}, {end=}")
-            return False
-    except Exception as e:
-        logger.info(f"error getting data {start=}, {end=}: {e}, reprocessing")
-    return True
-
-
 def full_run(start_date, end_date):
     logger.info("running 'full_run'")
     for year in range(start_date.year, end_date.year + 1):
@@ -103,13 +81,10 @@ def full_run(start_date, end_date):
         end = min(end_date, datetime(year + 1, 1, 1))
         if end - start <= timedelta(hours=1):
             continue
-
-        if _tec_interval_check(start, end):
-            download_tec(start, end)
-            process_tec(start, end)
-        if _arb_interval_check(start, end):
-            download_arb(start, end)
-            process_arb(start, end)
+        download_tec(start, end)
+        process_tec(start, end)
+        download_arb(start, end)
+        process_arb(start, end)
 
     download_omni(start_date, end_date)
     process_omni(start_date, end_date)

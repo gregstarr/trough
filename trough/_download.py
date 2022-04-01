@@ -15,8 +15,8 @@ try:
     import h5py
     from madrigalWeb import madrigalWeb
     import bs4
-except ImportError as e:
-    warnings.warn(f"Packages required for recreating dataset not installed: {e}")
+except ImportError as imp_err:
+    warnings.warn(f"Packages required for recreating dataset not installed: {imp_err}")
 
 
 from trough.exceptions import InvalidConfiguration
@@ -166,7 +166,7 @@ class MadrigalTecDownloader(Downloader):
 
     def _get_file_list(self, start_date, end_date):
         logger.info("Getting file list...")
-        experiments = sorted(self._get_tec_experiments(start_date - timedelta(hours=3), end_date + timedelta(hours=3)))
+        experiments = sorted(self._get_tec_experiments(start_date - timedelta(days=1), end_date + timedelta(days=1)))
         logger.info(f"found {len(experiments)} experiments")
         tec_files = {}
         for i, experiment in enumerate(experiments):
@@ -232,8 +232,8 @@ class OmniDownloader(Downloader):
         _download_ftp_file(self.server, file, local_path)
 
     def _get_file_list(self, start_date, end_date):
-        new_start_date = start_date - timedelta(hours=3)
-        new_end_date = end_date + timedelta(hours=3)
+        new_start_date = start_date - timedelta(days=1)
+        new_end_date = end_date + timedelta(days=1)
         files = {
             str(year): [f'/pub/data/omni/low_res_omni/omni2_{year:4d}.dat']
             for year in range(new_start_date.year, new_end_date.year + 1)
@@ -274,11 +274,11 @@ class ArbDownloader(Downloader):
         return local_files
 
     def _get_file_list(self, start_date, end_date):
-        start_date -= timedelta(hours=3)
-        end_date += timedelta(hours=3)
-        n_days = math.ceil((end_date - start_date) / timedelta(days=1))
+        date1 = start_date - timedelta(days=1)
+        date2 = end_date + timedelta(days=1)
+        n_days = math.ceil((date2 - date1) / timedelta(days=1))
         logger.info(f"getting files for {n_days} days")
-        days = [start_date + timedelta(days=t) for t in range(n_days)]
+        days = [date1 + timedelta(days=t) for t in range(n_days)]
         arb_files = {}
         for i, day in enumerate(days):
             if len(days) > 100 and not (i % (len(days) // 100)):

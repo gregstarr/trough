@@ -13,8 +13,8 @@ try:
     import pandas
     from skimage import measure, morphology
     from sklearn.metrics.pairwise import rbf_kernel
-except ImportError as e:
-    warnings.warn(f"Packages required for recreating dataset not installed: {e}")
+except ImportError as imp_err:
+    warnings.warn(f"Packages required for recreating dataset not installed: {imp_err}")
 
 from trough import config, utils, _tec, _arb
 
@@ -22,17 +22,22 @@ from trough import config, utils, _tec, _arb
 logger = logging.getLogger(__name__)
 
 
-def get_model(tec_data, omni_file):
+def get_model(tec_data, hemisphere, omni_file):
     """Get magnetic latitudes of the trough according to the model in Deminov 2017
     for a specific time and set of magnetic local times.
     """
+    logger.info("getting model")
     omni_data = xr.open_dataset(omni_file)
+    logger.info(f"{omni_data.time.values[0]=} {omni_data.time.values[-1]=}")
     kp = _get_weighted_kp(tec_data.time, omni_data)
+    logger.info(f"{kp.shape=}")
     apex = Apex(date=utils.datetime64_to_datetime(tec_data.time.values[0]))
     mlat = 65.5 * np.ones((tec_data.time.shape[0], tec_data.mlt.shape[0]))
+    if hemisphere == 'south':
+        mlat = mlat * -1
     for i in range(10):
         glat, glon = apex.convert(mlat, tec_data.mlt.values[None, :], 'mlt', 'geo', 350, tec_data.time.values[:, None])
-        mlat = _model_subroutine_lat(tec_data.mlt.values[None, :], glon, kp[:, None])
+        mlat = _model_subroutine_lat(tec_data.mlt.values[None, :], glon, kp[:, None], hemisphere)
     tec_data['model'] = xr.DataArray(
         mlat,
         coords={'time': tec_data.time, 'mlt': tec_data.mlt},
@@ -40,7 +45,7 @@ def get_model(tec_data, omni_file):
     )
 
 
-def _model_subroutine_lat(mlt, glon, kp):
+def _model_subroutine_lat(mlt, glon, kp, hemisphere):
     """Get's model output mlat given MLT, geographic lon and weighted kp
 
     Parameters
@@ -54,13 +59,19 @@ def _model_subroutine_lat(mlt, glon, kp):
     mlat: numpy.ndarray (n_t, n_mlt)
     """
     phi_t = 3.16 - 5.6 * np.cos(np.deg2rad(15 * (mlt - 2.4))) + 1.4 * np.cos(np.deg2rad(15 * (2 * mlt - .8)))
-    phi_lon = .85 * np.cos(np.deg2rad(glon + 63)) - .52 * np.cos(np.deg2rad(2 * glon + 5))
+    if hemisphere == 'north':
+        phi_lon = .85 * np.cos(np.deg2rad(glon + 63)) - .52 * np.cos(np.deg2rad(2 * glon + 5))
+    elif hemisphere == 'south':
+        phi_lon = 1.5 * np.cos(np.deg2rad(glon - 119))
+    else:
+        raise ValueError(f"Invalid hemisphere: {hemisphere}, valid = ['north', 'south']")
     return 65.5 - 2.4 * kp + phi_t + phi_lon * np.exp(-.3 * kp)
 
 
 def _get_weighted_kp(times, omni_data, tau=.6, T=10):
     """Get a weighed sum of kp values over time. See paper for details.
     """
+    logger.info(f"_get_weighted_kp {times[0]=} {times[-1]=}")
     ap = omni_data.sel(time=slice(times[0] - np.timedelta64(T, 'h'), times[-1]))['ap'].values
     prehistory = np.column_stack([ap[T - i:ap.shape[0] - i] for i in range(T)])
     weight_factors = tau ** np.arange(T)
@@ -86,6 +97,7 @@ def estimate_background(tec, patch_shape):
 
 
 def preprocess_interval(data, min_val=0, max_val=100, bg_est_shape=(1, 15, 15)):
+    logger.info("preprocessing interval")
     tec = data['tec'].values
     # throw away outlier values
     tec[tec > max_val] = np.nan
@@ -115,16 +127,21 @@ def fix_boundaries(labels):
     return fixed
 
 
-def remove_auroral(data, offset=3):
-    data['labels'] *= data.mlat < (data['arb'] + offset)
+def remove_auroral(data, hemisphere, offset=3):
+    if hemisphere == 'north':
+        data['labels'] *= data.mlat < (data['arb'] + offset)
+    elif hemisphere == 'south':
+        data['labels'] *= data.mlat > (data['arb'] - offset)
+    else:
+        raise ValueError(f"Invalid hemisphere: {hemisphere}, valid = ['north', 'south']")
 
 
-def postprocess(data, perimeter_th=50, area_th=1, closing_r=0):
+def postprocess(data, hemisphere, perimeter_th=50, area_th=1, closing_r=0):
     if closing_r > 0:
         selem = morphology.disk(closing_r, dtype=bool)[:, :, None]
         data['labels'] = np.pad(data['labels'], ((0, 0), (0, 0), (closing_r, closing_r)), 'wrap')
         data['labels'] = morphology.binary_closing(data['labels'], selem)[:, :, closing_r:-closing_r]
-    remove_auroral(data)
+    remove_auroral(data, hemisphere)
     for t in range(data.time.shape[0]):
         tmap = data['labels'][t].values
         labeled = measure.label(tmap, connectivity=2)
@@ -183,6 +200,8 @@ def get_optimization_args(data, model_weight_max, rbf_bw, tv_hw, tv_vw, l2_weigh
         l2 = (model_weight_max - 1) * l2 / l2.max() + 1
         l2 *= l2_weight
         fin_mask = np.isfinite(np.ravel(data['x'].isel(time=i)))
+        if not fin_mask.any():
+            raise Exception("WHY ALL NAN??")
         args = (cp.Variable(data.mlat.shape[0] * data.mlt.shape[0]), basis[fin_mask, :],
                 np.ravel(data['x'].isel(time=i))[fin_mask], tv, np.ravel(l2))
         all_args.append(args)
@@ -214,13 +233,13 @@ def run_multiple(args, parallel=True):
     return np.stack(results, axis=0)
 
 
-def label_trough_interval(start_date, end_date, params, tec_dir, arb_dir, omni_file):
+def label_trough_interval(start_date, end_date, params, hemisphere, tec_dir, arb_dir, omni_file):
     logger.info(f"labeling trough interval: {start_date=} {end_date=}")
-    data = _tec.get_tec_data(start_date, end_date, tec_dir).to_dataset(name='tec')
+    data = _tec.get_tec_data(start_date, end_date, hemisphere, tec_dir).to_dataset(name='tec')
     preprocess_interval(data, bg_est_shape=params.bg_est_shape)
 
-    data['arb'] = _arb.get_arb_data(start_date, end_date, arb_dir)
-    get_model(data, omni_file)
+    data['arb'] = _arb.get_arb_data(start_date, end_date, hemisphere, arb_dir)
+    get_model(data, hemisphere, omni_file)
     args = get_optimization_args(data, params.model_weight_max, params.rbf_bw, params.tv_hw, params.tv_vw,
                                  params.l2_weight, params.tv_weight)
     logger.info("Running inversion optimization")
@@ -237,7 +256,7 @@ def label_trough_interval(start_date, end_date, params, tec_dir, arb_dir, omni_f
     data['labels'] = data['score'] >= params.threshold
     # postprocess
     logger.info("Postprocessing inversion results")
-    postprocess(data, params.perimeter_th, params.area_th, params.closing_rad)
+    postprocess(data, hemisphere, params.perimeter_th, params.area_th, params.closing_rad)
     return data
 
 
@@ -256,44 +275,47 @@ def label_trough_dataset(start_date, end_date, params=None, tec_dir=None, arb_di
 
     Path(output_dir).mkdir(exist_ok=True, parents=True)
     for year in range(start_date.year, end_date.year + 1):
-        labels = []
-        scores = []
-        start = datetime(year, 1, 1, 0, 0)
-        while start.year < year + 1:
-            end = start + timedelta(days=1)
-            if start >= end_date or end <= start_date:
+        for hemisphere in ['north', 'south']:
+            labels = []
+            scores = []
+            start = datetime(year, 1, 1, 0, 0)
+            while start.year < year + 1:
+                end = start + timedelta(days=1)
+                if start >= end_date or end <= start_date:
+                    start += timedelta(days=1)
+                    continue
+                start = max(start_date, start)
+                end = min(end_date, end)
+                data = label_trough_interval(start, end, params, hemisphere, tec_dir, arb_dir, omni_file)
+                if end.year == start.year + 1:
+                    data = data.isel(time=slice(0, -1))
+                labels.append(data['labels'])
+                scores.append(data['score'])
                 start += timedelta(days=1)
-                continue
-            start = max(start_date, start)
-            end = min(end_date, end)
-            data = label_trough_interval(start, end, params, tec_dir, arb_dir, omni_file)
-            labels.append(data['labels'])
-            scores.append(data['score'])
-            start += timedelta(days=1)
-        labels = xr.concat(labels, 'time')
-        scores = xr.concat(scores, 'time')
-        labels.to_netcdf(Path(output_dir) / f"labels_{year:04d}.nc")
-        scores.to_netcdf(Path(output_dir) / f"scores_{year:04d}.nc")
+            labels = xr.concat(labels, 'time')
+            scores = xr.concat(scores, 'time')
+            labels.to_netcdf(Path(output_dir) / f"labels_{hemisphere}_{year:04d}.nc")
+            scores.to_netcdf(Path(output_dir) / f"scores_{hemisphere}_{year:04d}.nc")
 
 
-def get_label_paths(start_date, end_date, processed_dir):
+def get_label_paths(start_date, end_date, hemisphere, processed_dir):
     file_dates = np.arange(
         np.datetime64(start_date, 'Y'),
-        np.datetime64(end_date, 'Y') + 1,
+        (np.datetime64(end_date, 's')).astype('datetime64[Y]') + 1,
         np.timedelta64(1, 'Y')
     )
     file_dates = utils.decompose_datetime64(file_dates)
-    return [Path(processed_dir) / f"labels_{d[0]:04d}.nc" for d in file_dates]
+    return [Path(processed_dir) / f"labels_{hemisphere}_{d[0]:04d}.nc" for d in file_dates]
 
 
-def get_trough_labels(start_date, end_date, labels_dir=None):
+def get_trough_labels(start_date, end_date, hemisphere, labels_dir=None):
     if labels_dir is None:
         labels_dir = config.processed_labels_dir
-    data = xr.concat([xr.open_dataarray(file) for file in get_label_paths(start_date, end_date, labels_dir)], 'time')
+    data = xr.concat([xr.open_dataarray(file) for file in get_label_paths(start_date, end_date, hemisphere, labels_dir)], 'time')
     return data.sel(time=slice(start_date, end_date))
 
 
-def get_data(start_date, end_date, tec_dir=None, omni_file=None, labels_dir=None):
+def get_data(start_date, end_date, hemisphere, tec_dir=None, omni_file=None, labels_dir=None):
     if tec_dir is None:
         tec_dir = config.processed_tec_dir
     if omni_file is None:
@@ -301,6 +323,6 @@ def get_data(start_date, end_date, tec_dir=None, omni_file=None, labels_dir=None
     if labels_dir is None:
         labels_dir = config.processed_labels_dir
     data = xr.open_dataset(omni_file).sel(time=slice(start_date, end_date))
-    data['tec'] = _tec.get_tec_data(start_date, end_date, tec_dir)
-    data['labels'] = get_trough_labels(start_date, end_date, labels_dir)
+    data['tec'] = _tec.get_tec_data(start_date, end_date, hemisphere, tec_dir)
+    data['labels'] = get_trough_labels(start_date, end_date, hemisphere, labels_dir)
     return data

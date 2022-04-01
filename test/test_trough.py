@@ -3,8 +3,9 @@ import xarray as xr
 from datetime import datetime, timedelta
 from tempfile import TemporaryDirectory
 from pathlib import Path
+import pytest
 
-from trough import config, _trough, scripts
+from trough import config, _trough, scripts, get_data
 from trough._config import TroughIdParams
 
 
@@ -95,7 +96,7 @@ def test_postprocess():
             dims=['time', 'mlt']
         ),
     })
-    _trough.postprocess(data, perimeter_th=50)
+    _trough.postprocess(data, 'north', perimeter_th=50)
     labels = data['labels'].values[0]
     assert labels[good_labels].all()
     assert not labels[small_reject].any()
@@ -150,43 +151,69 @@ def test_get_tec_troughs():
     """Verify that get_tec_troughs can detect an actual trough, verify that high troughs are rejected using auroral
     boundary data
     """
+    n_hours = 12
     start_date = datetime(2015, 10, 7, 6, 0, 0)
-    end_date = start_date + timedelta(hours=12)
+    end_date = start_date + timedelta(hours=n_hours)
     params = TroughIdParams(bg_est_shape=(1, 19, 19), model_weight_max=5, l2_weight=.1, tv_weight=.05, tv_hw=2)
     with config.temp_config(trough_id_params=params):
         scripts.download_all(start_date, end_date)
         scripts.process_all(start_date, end_date)
-        data = _trough.label_trough_interval(start_date, end_date, config.trough_id_params, config.processed_tec_dir,
-                                             config.processed_arb_dir, config.processed_omni_file)
+        data_north = _trough.label_trough_interval(
+            start_date, end_date, config.trough_id_params, 'north',
+            config.processed_tec_dir, config.processed_arb_dir, config.processed_omni_file
+        )
+        data_south = _trough.label_trough_interval(
+            start_date, end_date, config.trough_id_params, 'south',
+            config.processed_tec_dir, config.processed_arb_dir, config.processed_omni_file
+        )
 
-    labels = data['labels'].values
-    assert labels.shape == (12, 60, 180)
-    assert labels[1, 20:30, 60:120].mean() > .5
+    labels_north = data_north['labels'].values
+    labels_south = data_south['labels'].values
+    assert labels_north.shape == (n_hours + 1, 60, 180)
+    assert labels_north[1, 20:30, 60:120].mean() > .5
+    assert labels_south.shape == (n_hours + 1, 60, 180)
+    assert labels_south[3, 20:30, 60:80].mean() > .5
     for i in range(12):
-        assert labels[i][(data.mlat > data['arb'][i] + 3).values].sum() == 0
+        assert labels_north[i][(data_north.mlat > data_north['arb'][i] + 3).values].sum() == 0
+        assert labels_south[i][(data_south.mlat < data_south['arb'][i] - 3).values].sum() == 0
 
 
-def test_process_trough_interval(test_dates):
-    start_date, end_date = test_dates
+@pytest.mark.parametrize('dates',
+                         [
+                             [datetime(2021, 1, 3, 6, 0, 0), datetime(2021, 1, 3, 12, 0, 0)],
+                             [datetime(2020, 12, 31, 20, 0, 0), datetime(2021, 1, 1, 4, 0, 0)]
+                         ])
+def test_process_trough_interval(dates):
+    start_date, end_date = dates
+    n_times = 1 + ((end_date - start_date) / timedelta(hours=1))
     scripts.download_all(start_date, end_date)
     scripts.process_all(start_date, end_date)
-    data = _trough.label_trough_interval(start_date, end_date, config.trough_id_params, config.processed_tec_dir,
-                                         config.processed_arb_dir, config.processed_omni_file)
+    data = _trough.label_trough_interval(
+        start_date, end_date, config.trough_id_params, 'north',
+        config.processed_tec_dir, config.processed_arb_dir, config.processed_omni_file
+    )
     assert 'labels' in data
     assert 'tec' in data
-    assert data.time.shape[0] == 6
+    assert data.time.shape[0] == n_times
     assert data.mlat.shape[0] == 60
     assert data.mlt.shape[0] == 180
     assert np.nanmean(data['tec'].values[data['labels'].values]) < np.nanmean(data['tec'].values[~data['labels'].values])
 
 
-def test_script(test_dates):
+@pytest.mark.parametrize('dates',
+                         [
+                             [datetime(2021, 1, 3, 6, 0, 0), datetime(2021, 1, 3, 12, 0, 0)],
+                             [datetime(2020, 12, 31, 20, 0, 0), datetime(2021, 1, 1, 4, 0, 0)]
+                         ])
+def test_script(dates):
+    start_date, end_date = dates
+    n_times = 1 + ((end_date - start_date) / timedelta(hours=1))
     with TemporaryDirectory() as tempdir:
         with config.temp_config(base_dir=tempdir):
-            scripts.full_run(*test_dates)
-            path = Path(config.processed_labels_dir) / "labels_2021.nc"
-            assert path.exists()
-            data = xr.open_dataarray(path)
+            scripts.full_run(*dates)
+            n_files = len([p for p in Path(config.processed_labels_dir).glob('labels*.nc')])
+            assert n_files == (end_date.year - start_date.year + 1) * 2
+            data = get_data(start_date, end_date, 'north')
             data.load()
-            assert data.size > 1
+            assert data.time.shape[0] == n_times
             data.close()

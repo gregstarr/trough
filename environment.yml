@@ -2,17 +2,17 @@ channels:
   - anaconda
   - conda-forge
 dependencies:
-   - numpy
-   - scipy
-   - h5py
-   - scikit-image
-   - scikit-learn
-   - appdirs
-   - bs4
-   - pandas
-   - xarray
-   - bottleneck
-   - cvxpy
+   - numpy==1.21.2
+   - scipy==1.7.3
+   - h5py==3.6.0
+   - scikit-image==0.19.1
+   - scikit-learn==1.0.2
+   - appdirs==1.4.4
+   - bs4==4.10.0
+   - pandas==1.3.5
+   - xarray==0.20.1
+   - bottleneck==1.3.2
+   - cvxpy==1.1.18
    - pip
    - pip:
-      - madrigalWeb
+      - madrigalWeb==3.2

@@ -2,13 +2,16 @@ name: Python Package using Conda
 
 on: [push]
 
+env:
+  CODECOV_TOKEN: 5454ef86-3f2b-45a7-8df0-636d3044ae13
+
 jobs:
   build-linux:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.8', '3.9', '3.10']
+        python-version: ['3.8', '3.9']
 
     steps:
     - uses: actions/checkout@v2
@@ -38,8 +41,9 @@ jobs:
       run: |
         conda install pytest
         pip install pytest-html
+        pip install pytest-cov
         pip install -e .
-        pytest test --html=${{ matrix.python-version }}-results.html --self-contained-html
+        pytest test --html=${{ matrix.python-version }}-results.html --self-contained-html --cov=./ --cov-report=xml
     - name: Move artifacts
       shell: bash -l {0}
       run: mv test.log ${{ matrix.python-version }}-test.log
@@ -51,3 +55,6 @@ jobs:
         path: |
           ${{ matrix.python-version }}-results.html
           ${{ matrix.python-version }}-test.log
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v2
+      if: always()
