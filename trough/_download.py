@@ -141,17 +141,19 @@ class MadrigalTecDownloader(Downloader):
         )
         return experiments
 
-    def _download_file(self, tec_file, local_path):
+    def _download_file(self, tec_file, local_path, retries=3):
         logger.info(f"downloading TEC file {tec_file} to {local_path}")
-        try:
-            if pathlib.Path(local_path).exists():
-                logger.info(f"already exists: {local_path}")
-            else:
-                return self.server.downloadFile(
-                    tec_file, local_path, self.user_name, self.user_email, self.user_affil, 'hdf5'
-                )
-        except socket.timeout:
-            logger.error(f'Failure downloading {tec_file} because it took more than allowed number of seconds')
+        for retry in range(retries):
+            try:
+                if pathlib.Path(local_path).exists():
+                    logger.info(f"already exists: {local_path}")
+                else:
+                    return self.server.downloadFile(
+                        tec_file, local_path, self.user_name, self.user_email, self.user_affil, 'hdf5'
+                    )
+            except(socket.timeout, TimeoutError):
+                logger.error(f'Failure downloading {tec_file} because it took more than allowed number of seconds')
+                self.server = madrigalWeb.MadrigalData("http://cedar.openmadrigal.org")
 
     def _download_files(self, files):
         local_files = []
@@ -327,17 +329,24 @@ class ArbDownloader(Downloader):
         return bad_server_files
 
 
-def _download_ftp_file(server, server_file: str, local_path: str):
+def _download_ftp_file(server, server_file: str, local_path: str, retries=3):
     logger.info(f"downloading file {server_file} to {local_path}")
-    with open(local_path, 'wb') as f:
-        server.retrbinary(f'RETR {str(server_file)}', f.write)
-
-
-def _download_http_file(http_file: str, local_path: str):
-    logger.info(f"downloading file {http_file} to {local_path}")
-    try:
-        with request.urlopen(http_file, timeout=60) as r:
+    for retry in range(retries):
+        try:
             with open(local_path, 'wb') as f:
-                f.write(r.read())
-    except socket.timeout:
-        logger.error(f'Failure downloading {http_file} because it took more than allowed number of seconds')
+                server.retrbinary(f'RETR {str(server_file)}', f.write)
+            return
+        except(socket.timeout, TimeoutError):
+            logger.error(f'Failure downloading {server_file} because it took more than allowed number of seconds')
+
+
+def _download_http_file(http_file: str, local_path: str, retries=3):
+    logger.info(f"downloading file {http_file} to {local_path}")
+    for retry in range(retries):
+        try:
+            with request.urlopen(http_file, timeout=60) as r:
+                with open(local_path, 'wb') as f:
+                    f.write(r.read())
+            return
+        except(socket.timeout, TimeoutError):
+            logger.error(f'Failure downloading {http_file} because it took more than allowed number of seconds')
