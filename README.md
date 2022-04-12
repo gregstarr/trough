@@ -18,12 +18,15 @@
 # Usage
 
 1. Clone Repo
-2. create conda environment using `environment.yml` (if you have trouble with apexpy, install it first)
-3. install trough with `pip install -e .`
-4. copy `config.json.example` --> `config.json` and change any options you want
-5. run with `python -m trough config.json`
-6. wait for it to finish (can take several days if you are running 5+ years)
-7. add `import trough` in your code and access the data using `trough.get_data`
+2. create conda environment: `conda env create -f environment.yml -n trough python=3.9`
+3. `conda activate trough`
+4. `pip install apexpy`
+5. if you get a numpy error when you try to import apexpy: `pip install --upgrade nump`
+6. install trough with `pip install -e .`
+7. copy `config.json.example` --> `config.json` and change any options you want
+8. run with `python -m trough config.json`
+9. wait for it to finish (can take several days if you are running 5+ years)
+10. add `import trough` in your code and access the data using `trough.get_data`
 
 ### Config
 #### Main Options
