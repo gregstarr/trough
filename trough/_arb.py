@@ -113,9 +113,9 @@ def process_auroral_boundary_dataset(start_date, end_date, download_dir=None, pr
     if process_dir is None:
         process_dir = config.processed_arb_dir
     if mlt_vals is None:
-        mlt_vals = config.get_mlt_vals()
+        mlt_vals = config.mlt_vals
     if dt is None:
-        dt = np.timedelta64(1, 'h')
+        dt = config.sample_dt
     Path(process_dir).mkdir(exist_ok=True, parents=True)
 
     for year in range(start_date.year, end_date.year + 1):

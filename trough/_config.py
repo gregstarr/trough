@@ -26,28 +26,6 @@ class TroughIdParams:
         return dataclasses.asdict(self)
 
 
-def _get_default_directory_structure(base_dir):
-    base = Path(base_dir)
-    download_base = base / 'download'
-    processed_base = base / 'processed'
-    download_tec_dir = download_base / 'tec'
-    download_arb_dir = download_base / 'arb'
-    download_omni_dir = download_base / 'omni'
-    processed_tec_dir = processed_base / 'tec'
-    processed_arb_dir = processed_base / 'arb'
-    processed_omni_file = processed_base / 'omni.nc'
-    processed_labels_dir = processed_base / 'labels'
-    return {
-        'download_tec_dir': str(download_tec_dir),
-        'download_arb_dir': str(download_arb_dir),
-        'download_omni_dir': str(download_omni_dir),
-        'processed_tec_dir': str(processed_tec_dir),
-        'processed_arb_dir': str(processed_arb_dir),
-        'processed_omni_file': str(processed_omni_file),
-        'processed_labels_dir': str(processed_labels_dir),
-    }
-
-
 trough_dirs = appdirs.AppDirs(appname='trough')
 
 
@@ -66,14 +44,7 @@ def parse_date(date_str):
 class Config:
 
     def __init__(self, config_path=None):
-        default_dirs = _get_default_directory_structure(trough_dirs.user_data_dir)
-        self.download_tec_dir = default_dirs['download_tec_dir']
-        self.download_arb_dir = default_dirs['download_arb_dir']
-        self.download_omni_dir = default_dirs['download_omni_dir']
-        self.processed_tec_dir = default_dirs['processed_tec_dir']
-        self.processed_arb_dir = default_dirs['processed_arb_dir']
-        self.processed_omni_file = default_dirs['processed_omni_file']
-        self.processed_labels_dir = default_dirs['processed_labels_dir']
+        self.base_dir = trough_dirs.user_data_dir
         self.trough_id_params = TroughIdParams()
         self.madrigal_user_name = None
         self.madrigal_user_email = None
@@ -95,40 +66,74 @@ class Config:
         if config_path is not None:
             self.load_json(config_path)
 
-    def get_config_name(self):
+    @property
+    def config_name(self):
         cfg = self.dict()
         return f"{cfg['script_name']}_{cfg['start_date']}_{cfg['end_date']}_config.json"
 
-    def get_mlat_bins(self):
+    @property
+    def mlat_bins(self):
         return np.arange(self.mlat_min - self.lat_res / 2, 90, self.lat_res)
 
-    def get_mlat_vals(self):
+    @property
+    def mlat_vals(self):
         return np.arange(self.mlat_min, 90, self.lat_res)
 
-    def get_mlt_bins(self):
+    @property
+    def mlt_bins(self):
         return np.arange(-12, 12 + 24 / 360, self.lon_res * 24 / 360)
 
-    def get_mlt_vals(self):
+    @property
+    def mlt_vals(self):
         return np.arange(-12 + .5 * self.lon_res * 24 / 360, 12 + 24 / 360, self.lon_res * 24 / 360)
 
-    def get_sample_dt(self):
+    @property
+    def sample_dt(self):
         return np.timedelta64(self.time_res_n, self.time_res_unit)
+
+    @property
+    def download_base(self):
+        return str(Path(self.base_dir) / 'download')
+
+    @property
+    def processed_base(self):
+        return str(Path(self.base_dir) / f'processed_{self.lat_res}_{self.lon_res}_{self.time_res_n}{self.time_res_unit}')
+
+    @property
+    def download_tec_dir(self):
+        return str(Path(self.download_base) / 'tec')
+
+    @property
+    def download_arb_dir(self):
+        return str(Path(self.download_base) / 'arb')
+
+    @property
+    def download_omni_dir(self):
+        return str(Path(self.download_base) / 'omni')
+
+    @property
+    def processed_tec_dir(self):
+        return str(Path(self.processed_base) / 'tec')
+
+    @property
+    def processed_arb_dir(self):
+        return str(Path(self.processed_base) / 'arb')
+
+    @property
+    def processed_omni_file(self):
+        return str(Path(self.processed_base) / 'omni.nc')
+
+    @property
+    def processed_labels_dir(self):
+        return str(Path(self.processed_base) / 'labels')
 
     def load_json(self, config_path):
         with open(config_path) as f:
             params = json.load(f)
-        if 'base_dir' in params:
-            params.update(**_get_default_directory_structure(params['base_dir']))
         self.load_dict(params)
 
     def load_dict(self, config_dict):
-        self.download_tec_dir = config_dict.get('download_tec_dir', self.download_tec_dir)
-        self.download_arb_dir = config_dict.get('download_arb_dir', self.download_arb_dir)
-        self.download_omni_dir = config_dict.get('download_omni_dir', self.download_omni_dir)
-        self.processed_tec_dir = config_dict.get('processed_tec_dir', self.processed_tec_dir)
-        self.processed_arb_dir = config_dict.get('processed_arb_dir', self.processed_arb_dir)
-        self.processed_omni_file = config_dict.get('processed_omni_file', self.processed_omni_file)
-        self.processed_labels_dir = config_dict.get('processed_labels_dir', self.processed_labels_dir)
+        self.base_dir = config_dict.get('base_dir', self.base_dir)
         self.trough_id_params = config_dict.get('trough_id_params', self.trough_id_params)
         if not isinstance(self.trough_id_params, TroughIdParams):
             self.trough_id_params = TroughIdParams(**self.trough_id_params)
@@ -151,7 +156,7 @@ class Config:
 
     def save(self, config_path=None):
         if config_path is None:
-            config_path = Path(trough_dirs.user_config_dir) / self.get_config_name()
+            config_path = Path(trough_dirs.user_config_dir) / self.config_name
         save_dict = self.dict().copy()
         Path(config_path).parent.mkdir(exist_ok=True, parents=True)
         with open(config_path, 'w') as f:
@@ -159,10 +164,6 @@ class Config:
         cfg_pointer = Path(__file__).parent / "config_path.txt"
         cfg_pointer.write_text(str(config_path))
         print(f"Saved config and setting default: {config_path}")
-
-    def set_base_dir(self, base_dir):
-        data_dirs = _get_default_directory_structure(base_dir)
-        self.load_dict(data_dirs)
 
     def dict(self):
         param_dict = self.__dict__.copy()
@@ -178,8 +179,6 @@ class Config:
         original_params = self.dict().copy()
         new_params = original_params.copy()
         new_params.update(**kwargs)
-        if 'base_dir' in kwargs:
-            new_params.update(**_get_default_directory_structure(kwargs['base_dir']))
         try:
             self.load_dict(new_params)
             yield self

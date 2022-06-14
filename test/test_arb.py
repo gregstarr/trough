@@ -70,7 +70,7 @@ def test_download_arb(test_dates, download_dir):
     ['dt', 'mlt_vals'],
     itertools.product(
         [np.timedelta64(30, 'm'), np.timedelta64(1, 'h'), np.timedelta64(2, 'h')],
-        [config.get_mlt_vals(), np.arange(10)]
+        [config.mlt_vals, np.arange(10)]
     )
 )
 def test_process_arb(download_dir, processed_dir, test_dates, dt, mlt_vals):
@@ -94,13 +94,13 @@ def test_process_arb_out_of_range(download_dir, processed_dir, test_dates):
     start, end = [date - timedelta(days=100) for date in test_dates]
     processed_file = Path(processed_dir) / 'arb_test.nc'
     with pytest.raises(InvalidProcessDates):
-        process_interval(start, end, 'north', processed_file, download_dir, config.get_mlt_vals(), dt)
+        process_interval(start, end, 'north', processed_file, download_dir, config.mlt_vals, dt)
 
 
 def test_get_arb_data(download_dir, processed_dir, test_dates):
     start, end = test_dates
     dt = np.timedelta64(1, 'h')
-    mlt = config.get_mlt_vals()
+    mlt = config.mlt_vals
     correct_times = np.arange(np.datetime64(start), np.datetime64(end) + dt, dt)
     processed_file = get_arb_paths(start, end, 'north', processed_dir)[0]
     process_interval(start, end, 'north', processed_file, download_dir, mlt, dt)
@@ -124,7 +124,7 @@ def test_scripts(test_dates):
             data = get_arb_data(start, end, 'north', cfg.processed_arb_dir)
             data.load()
             dt = np.timedelta64(1, 'h')
-            mlt = config.get_mlt_vals()
+            mlt = config.mlt_vals
             correct_times = np.arange(np.datetime64(test_dates[0]), np.datetime64(test_dates[-1]) + dt, dt)
             assert data.shape == (correct_times.shape[0], mlt.shape[0])
             assert (data.mlt == mlt).all().item()
