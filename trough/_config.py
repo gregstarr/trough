@@ -26,22 +26,6 @@ class TroughIdParams:
         return dataclasses.asdict(self)
 
 
-def _get_default_directory_structure(base_dir):
-    base = Path(base_dir)
-    download_base = base / 'download'
-    processed_base = base / 'processed'
-
-    return {
-        'download_tec_dir': str(download_tec_dir),
-        'download_arb_dir': str(download_arb_dir),
-        'download_omni_dir': str(download_omni_dir),
-        'processed_tec_dir': str(processed_tec_dir),
-        'processed_arb_dir': str(processed_arb_dir),
-        'processed_omni_file': str(processed_omni_file),
-        'processed_labels_dir': str(processed_labels_dir),
-    }
-
-
 trough_dirs = appdirs.AppDirs(appname='trough')
 
 
