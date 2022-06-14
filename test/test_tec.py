@@ -122,8 +122,8 @@ def test_download_tec(test_dates, download_dir):
     ['dt', 'mlt_bins', 'mlat_bins'],
     itertools.product(
         [np.timedelta64(10, 'm'), np.timedelta64(30, 'm'), np.timedelta64(1, 'h'), np.timedelta64(2, 'h')],
-        [config.get_mlt_bins(), np.arange(10)],
-        [config.get_mlat_bins(), np.arange(10)]
+        [config.mlt_bins, np.arange(10)],
+        [config.mlat_bins, np.arange(10)]
     )
 )
 def test_process_tec(download_dir, process_dir, test_dates, dt, mlt_bins, mlat_bins):
@@ -153,14 +153,14 @@ def test_process_tec_out_of_range(download_dir, process_dir, test_dates):
     start, end = [date - timedelta(days=100) for date in test_dates]
     processed_file = Path(process_dir) / 'tec_test.nc'
     with pytest.raises(InvalidProcessDates):
-        process_interval(start, end, 'north', processed_file, download_dir, dt, config.get_mlat_bins(), config.get_mlt_bins())
+        process_interval(start, end, 'north', processed_file, download_dir, dt, config.mlat_bins, config.mlt_bins)
 
 
 def test_get_tec_data(download_dir, process_dir, test_dates):
     start, end = test_dates
     dt = np.timedelta64(1, 'h')
-    mlt_bins = config.get_mlt_bins()
-    mlat_bins = config.get_mlat_bins()
+    mlt_bins = config.mlt_bins
+    mlat_bins = config.mlat_bins
     mlt_vals = (mlt_bins[:-1] + mlt_bins[1:]) / 2
     mlat_vals = (mlat_bins[:-1] + mlat_bins[1:]) / 2
     correct_times = np.arange(np.datetime64(start), np.datetime64(end) + dt, dt)
@@ -191,8 +191,8 @@ def test_scripts(test_dates):
                 data = get_tec_data(start, end, hemisphere, cfg.processed_tec_dir)
                 data.load()
                 dt = np.timedelta64(1, 'h')
-                mlt_vals = config.get_mlt_vals()
-                mlat_vals = config.get_mlat_vals()
+                mlt_vals = config.mlt_vals
+                mlat_vals = config.mlat_vals
                 correct_times = np.arange(np.datetime64(test_dates[0]), np.datetime64(test_dates[-1]) + dt, dt)
                 h = 1 if hemisphere == 'north' else -1
                 assert data.shape == (correct_times.shape[0], mlat_vals.shape[0], mlt_vals.shape[0])

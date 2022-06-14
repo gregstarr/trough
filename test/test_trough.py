@@ -30,7 +30,7 @@ def test_preprocess_interval():
 
 
 def test_model_artificial_example():
-    mlt_grid, mlat_grid = np.meshgrid(config.get_mlt_vals(), config.get_mlat_vals())
+    mlt_grid, mlat_grid = np.meshgrid(config.mlt_vals, config.mlat_vals)
     times = np.datetime64("2000") + np.arange(4) * np.timedelta64(1, 'h')
     # nominal labels
     labels1 = abs(mlat_grid - 65) <= 2
@@ -46,7 +46,7 @@ def test_model_artificial_example():
     shp = (4,) + mlat_grid.shape
     det_log_tec = det_log_tec.reshape(shp)
     det_log_tec += np.random.randn(*shp) * .1
-    coords = {'time': times, 'mlat': config.get_mlat_vals(), 'mlt': config.get_mlt_vals()}
+    coords = {'time': times, 'mlat': config.mlat_vals, 'mlt': config.mlt_vals}
     data = xr.Dataset({
         'x': xr.DataArray(
             det_log_tec,
@@ -55,7 +55,7 @@ def test_model_artificial_example():
         ),
         'model': xr.DataArray(
             np.ones((times.shape[0], mlt_grid.shape[1])) * 65,
-            coords={'time': times, 'mlt': config.get_mlt_vals()},
+            coords={'time': times, 'mlt': config.mlt_vals},
             dims=['time', 'mlt']
         ),
     })
@@ -72,7 +72,7 @@ def test_postprocess():
     """verify that small troughs are rejected, verify that troughs that wrap around the border are not incorrectly
     rejected
     """
-    mlt_grid, mlat_grid = np.meshgrid(config.get_mlt_vals(), config.get_mlat_vals())
+    mlt_grid, mlat_grid = np.meshgrid(config.mlt_vals, config.mlat_vals)
     good_labels = (abs(mlat_grid - 65) < 3) * (abs(mlt_grid) < 2)
     small_reject = (abs(mlat_grid - 52) <= 1) * (abs(mlt_grid - 4) <= .5)
     boundary_good_labels = (abs(mlat_grid - 65) < 3) * (abs(mlt_grid) >= 10.2)
@@ -83,7 +83,7 @@ def test_postprocess():
     high_labels = (abs(mlat_grid - 80) < 2) * (abs(mlt_grid + 6) <= 3)
     arb = np.ones((1, 180)) * 70
     initial_labels = good_labels + small_reject + boundary_good_labels + boundary_bad_labels + weird_good_labels + high_labels
-    coords = {'time': [0], 'mlat': config.get_mlat_vals(), 'mlt': config.get_mlt_vals()}
+    coords = {'time': [0], 'mlat': config.mlat_vals, 'mlt': config.mlt_vals}
     data = xr.Dataset({
         'labels': xr.DataArray(
             initial_labels[None],
@@ -92,7 +92,7 @@ def test_postprocess():
         ),
         'arb': xr.DataArray(
             arb,
-            coords={'time': [0], 'mlt': config.get_mlt_vals()},
+            coords={'time': [0], 'mlt': config.mlt_vals},
             dims=['time', 'mlt']
         ),
     })
@@ -211,6 +211,49 @@ def test_script(dates):
     with TemporaryDirectory() as tempdir:
         with config.temp_config(base_dir=tempdir):
             scripts.full_run(*dates)
+            n_files = len([p for p in Path(config.processed_labels_dir).glob('labels*.nc')])
+            assert n_files == (end_date.year - start_date.year + 1) * 2
+            data = get_data(start_date, end_date, 'north')
+            data.load()
+            assert data.time.shape[0] == n_times
+            data.close()
+
+
+def test_script_multiple_config():
+    start_date = datetime(2015, 3, 17, 5, 0, 0)
+    end_date = datetime(2015, 3, 17, 15, 0, 0)
+    offset = timedelta(hours=5)
+    with TemporaryDirectory() as tempdir:
+        with config.temp_config(base_dir=tempdir):
+            scripts.full_run(start_date, end_date)
+        with config.temp_config(base_dir=tempdir, time_res_n=30, time_res_unit='m'):
+            scripts.full_run(start_date + offset, end_date + offset)
+        with config.temp_config(base_dir=tempdir):
+            n_files = len([p for p in Path(config.processed_labels_dir).glob('labels*.nc')])
+            n_times = 1 + ((end_date - start_date) / timedelta(hours=1))
+            assert n_files == (end_date.year - start_date.year + 1) * 2
+            data = get_data(start_date, end_date, 'north')
+            data.load()
+            assert data.time.shape[0] == n_times
+            data.close()
+        with config.temp_config(base_dir=tempdir, time_res_n=30, time_res_unit='m'):
+            n_files = len([p for p in Path(config.processed_labels_dir).glob('labels*.nc')])
+            n_times = 1 + ((end_date - start_date) / timedelta(minutes=30))
+            assert n_files == (end_date.year - start_date.year + 1) * 2
+            data = get_data(start_date + offset, end_date + offset, 'north')
+            data.load()
+            assert data.time.shape[0] == n_times
+            data.close()
+
+
+@pytest.mark.slow
+def test_date_error():
+    start_date = datetime(2015, 3, 17)
+    end_date = datetime(2015, 3, 18)
+    n_times = 1 + ((end_date - start_date) / timedelta(minutes=30))
+    with TemporaryDirectory() as tempdir:
+        with config.temp_config(base_dir=tempdir, time_res_n=30, time_res_unit='m'):
+            scripts.full_run(start_date, end_date)
             n_files = len([p for p in Path(config.processed_labels_dir).glob('labels*.nc')])
             assert n_files == (end_date.year - start_date.year + 1) * 2
             data = get_data(start_date, end_date, 'north')

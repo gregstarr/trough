@@ -11,6 +11,15 @@ logger = logging.getLogger(__name__)
 
 def pytest_addoption(parser):
     parser.addoption("--skip-ftp", action='store_true', default=False)
+    parser.addoption("--run-slow", action="store_true", default=False, help="Run slow tests")
+
+
+def pytest_collection_modifyitems(config, items):
+    if not config.getoption("--run-slow"):
+        skipper = pytest.mark.skip(reason="Only run when --run-slow is given")
+        for item in items:
+            if "slow" in item.keywords:
+                item.add_marker(skipper)
 
 
 @pytest.fixture(scope='session', autouse=True)
@@ -22,7 +31,7 @@ def skip_ftp(request):
 def setup_cfg(skip_ftp):
     logger.info("setting up config")
     with TemporaryDirectory() as tempdir:
-        config.set_base_dir(tempdir)
+        config.base_dir = tempdir
         config.madrigal_user_affil = 'bu'
         config.madrigal_user_email = 'gstarr@bu.edu'
         config.madrigal_user_name = 'gregstarr'

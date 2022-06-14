@@ -76,7 +76,12 @@ def _get_weighted_kp(times, omni_data, tau=.6, T=10):
     prehistory = np.column_stack([ap[T - i:ap.shape[0] - i] for i in range(T)])
     weight_factors = tau ** np.arange(T)
     ap_tau = np.sum((1 - tau) * prehistory * weight_factors, axis=1)
-    return 2.1 * np.log(.2 * ap_tau + 1)
+    values = 2.1 * np.log(.2 * ap_tau + 1)
+    if (times.values[1] - times.values[0]).astype('timedelta64[m]').astype(int) == 60:
+        return values
+    ut_initial = np.arange(times.values[0], times.values[-1] + np.timedelta64(1, 'h'), np.timedelta64(1, 'h')).astype('datetime64[s]').astype(int)
+    ut_final = times.values.astype('datetime64[s]').astype(int)
+    return np.interp(ut_final, ut_initial, values)
 
 
 def estimate_background(tec, patch_shape):
@@ -322,7 +327,10 @@ def get_data(start_date, end_date, hemisphere, tec_dir=None, omni_file=None, lab
         omni_file = config.processed_omni_file
     if labels_dir is None:
         labels_dir = config.processed_labels_dir
+    tec = _tec.get_tec_data(start_date, end_date, hemisphere, tec_dir)
     data = xr.open_dataset(omni_file).sel(time=slice(start_date, end_date))
-    data['tec'] = _tec.get_tec_data(start_date, end_date, hemisphere, tec_dir)
+    if (tec.time.values[1] - tec.time.values[0]).astype('timedelta64[m]').astype(int) != 60:
+        data = data.interp(time=tec.time)
+    data['tec'] = tec
     data['labels'] = get_trough_labels(start_date, end_date, hemisphere, labels_dir)
     return data

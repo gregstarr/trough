@@ -173,11 +173,11 @@ def process_tec_dataset(start_date, end_date, download_dir=None, process_dir=Non
     if process_dir is None:
         process_dir = config.processed_tec_dir
     if mlt_bins is None:
-        mlt_bins = config.get_mlt_bins()
+        mlt_bins = config.mlt_bins
     if mlat_bins is None:
-        mlat_bins = config.get_mlat_bins()
+        mlat_bins = config.mlat_bins
     if dt is None:
-        dt = np.timedelta64(1, 'h')
+        dt = config.sample_dt
     Path(process_dir).mkdir(exist_ok=True, parents=True)
 
     logger.info(f"processing tec dataset over interval {start_date=} {end_date=}")
