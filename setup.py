@@ -9,10 +9,4 @@ setup(
     author='gregstarr',
     author_email='gregstarr2@gmail.com',
     description='',
-    install_requires=[
-        'numpy',
-        'scipy',
-        'appdirs',
-        'xarray'
-    ]
 )
