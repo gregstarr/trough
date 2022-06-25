@@ -23,10 +23,6 @@ jobs:
     - name: Conda info
       shell: bash -l {0}
       run: conda info
-    - name: Finish python setup
-      shell: bash -l {0}
-      run: |
-        pip install --upgrade numpy
     - name: Lint with flake8
       shell: bash -l {0}
       run: |
@@ -41,6 +37,7 @@ jobs:
         conda install pytest
         pip install pytest-html
         pip install pytest-cov
+        pip install --upgrade numpy
         pip install -e .
         pytest test --html=${{ matrix.python-version }}-results.html --self-contained-html --cov=./ --cov-report=xml
     - name: Move artifacts
