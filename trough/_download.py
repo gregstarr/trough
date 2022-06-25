@@ -1,3 +1,4 @@
+import time
 import numpy as np
 from datetime import datetime, timedelta
 import math
@@ -146,7 +147,7 @@ class MadrigalTecDownloader(Downloader):
                 )
             except ValueError as err:
                 logger.warning(f'Failure getting experiments, retrying {retry}')
-                self.server = madrigalWeb.MadrigalData("http://cedar.openmadrigal.org")
+                time.sleep(10)
         raise err
 
     def _download_file(self, tec_file, local_path):
@@ -162,7 +163,7 @@ class MadrigalTecDownloader(Downloader):
                     )
             except(socket.timeout, TimeoutError) as err:
                 logger.warning(f'Failure downloading {tec_file}')
-                self.server = madrigalWeb.MadrigalData("http://cedar.openmadrigal.org")
+                time.sleep(10)
         raise err
 
     def _download_files(self, files):
@@ -196,7 +197,7 @@ class MadrigalTecDownloader(Downloader):
                         break
                     except ValueError as err:
                         logger.warning(f'Failure getting experiment {experiment.id}')
-                        self.server = madrigalWeb.MadrigalData("http://cedar.openmadrigal.org")
+                        time.sleep(10)
                 else:
                     raise err
             tec_files[cache_key] = files
@@ -358,6 +359,7 @@ def _download_ftp_file(server, server_file: str, local_path: str):
             return
         except(socket.timeout, TimeoutError) as err:
             logger.error(f'Failure downloading {server_file} because it took more than allowed number of seconds')
+            time.sleep(10)
     raise err
 
 
@@ -372,4 +374,5 @@ def _download_http_file(http_file: str, local_path: str):
             return
         except(socket.timeout, TimeoutError) as err:
             logger.error(f'Failure downloading {http_file} because it took more than allowed number of seconds')
+            time.sleep(10)
     raise err
