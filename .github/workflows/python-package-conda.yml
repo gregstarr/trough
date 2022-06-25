@@ -23,6 +23,11 @@ jobs:
     - name: Conda info
       shell: bash -l {0}
       run: conda info
+    - name: Finish python setup
+      shell: bash -l {0}
+      run: |
+        pip install apexpy
+        pip install --upgrade numpy==1.22.4
     - name: Lint with flake8
       shell: bash -l {0}
       run: |
