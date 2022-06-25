@@ -135,6 +135,7 @@ class MadrigalTecDownloader(Downloader):
 
     def _get_tec_experiments(self, start_date: datetime, end_date: datetime):
         logger.info(f"getting TEC experiments between {start_date} and {end_date}")
+        err = Exception
         for retry in range(RETRIES):
             try:
                 return self.server.getExperiments(
@@ -143,13 +144,14 @@ class MadrigalTecDownloader(Downloader):
                     start_date.second, end_date.year, end_date.month, end_date.day, end_date.hour, end_date.minute,
                     end_date.second,
                 )
-            except ValueError as e:
+            except ValueError as err:
                 logger.warning(f'Failure getting experiments, retrying {retry}')
                 self.server = madrigalWeb.MadrigalData("http://cedar.openmadrigal.org")
-        raise e
+        raise err
 
     def _download_file(self, tec_file, local_path):
         logger.info(f"downloading TEC file {tec_file} to {local_path}")
+        err = Exception
         for retry in range(RETRIES):
             try:
                 if pathlib.Path(local_path).exists():
@@ -158,10 +160,10 @@ class MadrigalTecDownloader(Downloader):
                     return self.server.downloadFile(
                         tec_file, local_path, self.user_name, self.user_email, self.user_affil, 'hdf5'
                     )
-            except(socket.timeout, TimeoutError) as e:
+            except(socket.timeout, TimeoutError) as err:
                 logger.warning(f'Failure downloading {tec_file}')
                 self.server = madrigalWeb.MadrigalData("http://cedar.openmadrigal.org")
-        raise e
+        raise err
 
     def _download_files(self, files):
         local_files = []
@@ -186,16 +188,17 @@ class MadrigalTecDownloader(Downloader):
             if cache_key in self.cache:
                 files = self.cache[cache_key]
             else:
+                err = Exception
                 for retry in range(RETRIES):
                     try:
                         experiment_files = self.server.getExperimentFiles(experiment.id)
                         files = [exp.name for exp in experiment_files if exp.kindat == 3500]
                         break
-                    except ValueError as e:
+                    except ValueError as err:
                         logger.warning(f'Failure getting experiment {experiment.id}')
                         self.server = madrigalWeb.MadrigalData("http://cedar.openmadrigal.org")
                 else:
-                    raise e
+                    raise err
             tec_files[cache_key] = files
         return tec_files
 
@@ -205,8 +208,8 @@ class MadrigalTecDownloader(Downloader):
             with h5py.File(local_file, 'r') as f:
                 tec = f['Data']['Array Layout']['2D Parameters']['tec'][()]
                 timestamps = f['Data']['Array Layout']['timestamps'][()]
-        except Exception as e:
-            logger.warning(f"bad local file: {local_file}, error: {e}")
+        except Exception as err:
+            logger.warning(f"bad local file: {local_file}, error: {err}")
             return False
         return (timestamps.shape[0] > 10) and (np.sum(np.isfinite(tec)) > 100)
 
@@ -332,8 +335,8 @@ class ArbDownloader(Downloader):
         try:
             with h5py.File(local_file, 'r') as f:
                 lon = f['MODEL_NORTH_GEOGRAPHIC_LONGITUDE'][()]
-        except Exception as e:
-            logger.warning(f"bad local file: {local_file}, error: {e}")
+        except Exception as err:
+            logger.warning(f"bad local file: {local_file}, error: {err}")
             return False
         return lon.shape[0] > 10
 
@@ -347,22 +350,26 @@ class ArbDownloader(Downloader):
 
 def _download_ftp_file(server, server_file: str, local_path: str):
     logger.info(f"downloading file {server_file} to {local_path}")
+    err = Exception
     for retry in range(RETRIES):
         try:
             with open(local_path, 'wb') as f:
                 server.retrbinary(f'RETR {str(server_file)}', f.write)
             return
-        except(socket.timeout, TimeoutError):
+        except(socket.timeout, TimeoutError) as err:
             logger.error(f'Failure downloading {server_file} because it took more than allowed number of seconds')
+    raise err
 
 
 def _download_http_file(http_file: str, local_path: str):
     logger.info(f"downloading file {http_file} to {local_path}")
+    err = Exception
     for retry in range(RETRIES):
         try:
             with request.urlopen(http_file, timeout=60) as r:
                 with open(local_path, 'wb') as f:
                     f.write(r.read())
             return
-        except(socket.timeout, TimeoutError):
+        except(socket.timeout, TimeoutError) as err:
             logger.error(f'Failure downloading {http_file} because it took more than allowed number of seconds')
+    raise err

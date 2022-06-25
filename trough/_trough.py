@@ -79,7 +79,11 @@ def _get_weighted_kp(times, omni_data, tau=.6, T=10):
     values = 2.1 * np.log(.2 * ap_tau + 1)
     if (times.values[1] - times.values[0]).astype('timedelta64[m]').astype(int) == 60:
         return values
-    ut_initial = np.arange(times.values[0], times.values[-1] + np.timedelta64(1, 'h'), np.timedelta64(1, 'h')).astype('datetime64[s]').astype(int)
+    ut_initial = np.arange(
+        times.values[0],
+        times.values[-1] + np.timedelta64(1, 'h'),
+        np.timedelta64(1, 'h')
+    ).astype('datetime64[s]').astype(int)
     ut_final = times.values.astype('datetime64[s]').astype(int)
     return np.interp(ut_final, ut_initial, values)
 

@@ -147,7 +147,7 @@ def get_data_checker(data_getter):
                     logger.info(f"downloaded data already processed {processed_file=}, checking...")
                     return False
             except KeyError:
-                logger.info(f"processed file doesn't have the requested data")
+                logger.info("processed file doesn't have the requested data")
             except Exception as e:
                 logger.info(f"error reading processed file {processed_file=}: {e}, removing and reprocessing")
                 processed_file.unlink()
