@@ -248,7 +248,7 @@ def test_script_multiple_config():
 
 @pytest.mark.slow
 def test_date_error():
-    start_date = datetime(2015, 3, 17)
+    start_date = datetime(2015, 3, 15)
     end_date = datetime(2015, 3, 18)
     n_times = 1 + ((end_date - start_date) / timedelta(minutes=30))
     with TemporaryDirectory() as tempdir:
