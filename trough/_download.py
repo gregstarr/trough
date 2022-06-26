@@ -161,7 +161,7 @@ class MadrigalTecDownloader(Downloader):
                     return self.server.downloadFile(
                         tec_file, local_path, self.user_name, self.user_email, self.user_affil, 'hdf5'
                     )
-            except(socket.timeout, TimeoutError) as err:
+            except ValueError as err:
                 logger.warning(f'Failure downloading {tec_file}')
                 time.sleep(10)
         raise err
