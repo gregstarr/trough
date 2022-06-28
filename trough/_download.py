@@ -152,19 +152,19 @@ class MadrigalTecDownloader(Downloader):
 
     def _download_file(self, tec_file, local_path):
         logger.info(f"downloading TEC file {tec_file} to {local_path}")
-        err = Exception
-        for retry in range(RETRIES):
-            try:
-                if pathlib.Path(local_path).exists():
-                    logger.info(f"already exists: {local_path}")
-                else:
+        if pathlib.Path(local_path).exists():
+            logger.info(f"already exists: {local_path}")
+        else:
+            err = Exception
+            for retry in range(RETRIES):
+                try:
                     return self.server.downloadFile(
                         tec_file, local_path, self.user_name, self.user_email, self.user_affil, 'hdf5'
                     )
-            except ValueError as err:
-                logger.warning(f'Failure downloading {tec_file}')
-                time.sleep(10)
-        raise err
+                except ValueError as err:
+                    logger.warning(f'Failure downloading {tec_file}')
+                    time.sleep(10)
+            raise err
 
     def _download_files(self, files):
         local_files = []
