@@ -204,15 +204,19 @@ class MadrigalTecDownloader(Downloader):
         return tec_files
 
     @staticmethod
-    def _verify_local_file(local_file):
+    def _verify_local_file(local_file: str) -> bool:
         try:
             with h5py.File(local_file, 'r') as f:
                 tec = f['Data']['Array Layout']['2D Parameters']['tec'][()]
                 timestamps = f['Data']['Array Layout']['timestamps'][()]
+                if (timestamps.shape[0] > 10) and (np.sum(np.isfinite(tec)) > 100):
+                    return True
+                logger.warning(f"bad local file: {local_file}, error: timestamps {timestamps.shape[0]} tec {np.sum(np.isfinite(tec))}")
         except Exception as err:
             logger.warning(f"bad local file: {local_file}, error: {err}")
-            return False
-        return (timestamps.shape[0] > 10) and (np.sum(np.isfinite(tec)) > 100)
+        
+        pathlib.Path(local_file).unlink()
+        return False
 
     def _verify_files(self, local_files, server_files):
         bad_server_files = [
@@ -263,8 +267,14 @@ class OmniDownloader(Downloader):
         return files
 
     @staticmethod
-    def _verify_local_file(local_file):
-        return (pathlib.Path(local_file).stat().st_size / (2 ** 20)) > 1  # file size > 1Mb
+    def _verify_local_file(local_file: str) -> bool:
+        local_file_path = pathlib.Path(local_file)
+        size_kb = local_file_path.stat().st_size / (2 ** 10)
+        if size_kb > 1:  # file size > 1Kb
+            return True
+        local_file_path.unlink()
+        logger.warning(f"bad local file: {local_file}, error: too small {size_kb}Kb")
+        return False
 
     def _verify_files(self, local_files, server_files):
         bad_server_files = [
@@ -332,14 +342,18 @@ class ArbDownloader(Downloader):
         return files
 
     @staticmethod
-    def _verify_local_file(local_file):
+    def _verify_local_file(local_file: str) -> bool:
         try:
             with h5py.File(local_file, 'r') as f:
                 lon = f['MODEL_NORTH_GEOGRAPHIC_LONGITUDE'][()]
+                if lon.shape[0] > 10:
+                    return True
+                logger.warning(f"bad local file: {local_file}, error: too few lon {lon.shape[0]}")
         except Exception as err:
             logger.warning(f"bad local file: {local_file}, error: {err}")
-            return False
-        return lon.shape[0] > 10
+        
+        pathlib.Path(local_file).unlink()
+        return False
 
     def _verify_files(self, local_files, server_files):
         bad_server_files = [

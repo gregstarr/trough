@@ -118,7 +118,9 @@ def process_auroral_boundary_dataset(start_date, end_date, download_dir=None, pr
         dt = config.sample_dt
     Path(process_dir).mkdir(exist_ok=True, parents=True)
 
+    logger.info(f"processing arb dataset over interval {start_date=} {end_date=}")
     for year in range(start_date.year, end_date.year + 1):
+        logger.info(f"arb year {year=}")
         start = max(start_date, datetime(year, 1, 1))
         end = utils.datetime64_to_datetime(np.datetime64(datetime(year + 1, 1, 1)) - dt)
         end = min(end_date, end)
